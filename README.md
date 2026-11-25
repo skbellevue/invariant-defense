@@ -3,21 +3,21 @@
 **Detect AI-enabled malware by what it must do, not by what it looks like.**
 
 `invariant-defense` is an open-source reference implementation of the **Invariant Defense Model**, described in
-[*Signatures Can't Catch What Rewrites Itself: A Defense Model for AI-Enabled Malware*](https://kameni.com/blog/signatures-cant-catch-what-rewrites-itself-a-defense-model-for-ai-enabled-malwar-ktv4n).
+[_Signatures Can't Catch What Rewrites Itself: A Defense Model for AI-Enabled Malware_](https://kameni.com/blog/signatures-cant-catch-what-rewrites-itself-a-defense-model-for-ai-enabled-malwar-ktv4n).
 
 Malware that asks a language model for its next command, or rewrites its own source every hour, leaves no stable
 artifact for a signature to match. But AI lets an attacker change the **form** of an attack cheaply, not its
 **requirements**. Whatever the code looks like, the attack still:
 
-| Layer | Invariant | Control in this repo |
-|---|---|---|
-| **L0** | (cheap filter) | Signatures and reputation are kept; YARA rules for keys/prompts live in `rules/yara` |
-| **L1** | needs a way in | `invariant exposure`: AI-platform inventory vs. CVEs, CISA KEV, default secrets, patch age |
-| **L2** | must reach a model | AI egress allow-list, LLM endpoint catalog, beacon analytics, key reuse; `invariant hunt` for embedded keys and prompts |
-| **L3** | must run on a host | process-lineage analytics: model-reply-executed, generated scripts, self-rewrite, persistence, app-server shells, recon bursts, staging, AI-CLI abuse |
-| **L4** | must borrow privilege | JWT forgery with public default keys, spoofed service User-Agents, session replay, backdoor admins, credential age and least agency |
-| **L5** | must touch data | canary files and tables, destructive-rate limits, SQL guards for PostgreSQL and MySQL, verified config snapshots |
-| **Loop** | speed is a control | isolate automatically, revoke with approval, verify agent self-reports against telemetry, feed learned indicators back |
+| Layer    | Invariant             | Control in this repo                                                                                                                                  |
+| -------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **L0**   | (cheap filter)        | Signatures and reputation are kept; YARA rules for keys/prompts live in `rules/yara`                                                                  |
+| **L1**   | needs a way in        | `invariant exposure`: AI-platform inventory vs. CVEs, CISA KEV, default secrets, patch age                                                            |
+| **L2**   | must reach a model    | AI egress allow-list, LLM endpoint catalog, beacon analytics, key reuse; `invariant hunt` for embedded keys and prompts                               |
+| **L3**   | must run on a host    | process-lineage analytics: model-reply-executed, generated scripts, self-rewrite, persistence, app-server shells, recon bursts, staging, AI-CLI abuse |
+| **L4**   | must borrow privilege | JWT forgery with public default keys, spoofed service User-Agents, session replay, backdoor admins, credential age and least agency                   |
+| **L5**   | must touch data       | canary files and tables, destructive-rate limits, SQL guards for PostgreSQL and MySQL, verified config snapshots                                      |
+| **Loop** | speed is a control    | isolate automatically, revoke with approval, verify agent self-reports against telemetry, feed learned indicators back                                |
 
 Everything runs on the Python standard library plus PyYAML. `yara-python` and `psutil` are optional.
 
@@ -30,7 +30,7 @@ Everything runs on the Python standard library plus PyYAML. `yara-python` and `p
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/invariant-defense && cd invariant-defense
+git clone https://github.com/skbellevue/invariant-defense.git && cd invariant-defense
 pip install -e ".[dev]"          # or: pip install .   (runtime only)
 invariant demo --respond          # replay four scenarios through every layer, dry-run response
 pytest -o addopts="" -q           # 75 tests
@@ -38,12 +38,12 @@ pytest -o addopts="" -q           # 75 tests
 
 The demo replays synthetic telemetry (no malware, no real keys, documentation IP ranges only):
 
-| Scenario | Modeled on | What fires |
-|---|---|---|
-| `promptflux` | VBScript dropper asking Gemini to rewrite it hourly (GTIG, Nov 2025) | L2 egress, periodic model calls, self-rewrite, Startup persistence, removable-media spread |
-| `lamehug` | Python stealer asking a Qwen model on Hugging Face for recon commands (CERT-UA/GTIG, 2025) | L2 egress, **model reply executed**, recon burst, document staging |
+| Scenario     | Modeled on                                                                                                                  | What fires                                                                                                                             |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `promptflux` | VBScript dropper asking Gemini to rewrite it hourly (GTIG, Nov 2025)                                                        | L2 egress, periodic model calls, self-rewrite, Startup persistence, removable-media spread                                             |
+| `lamehug`    | Python stealer asking a Qwen model on Hugging Face for recon commands (CERT-UA/GTIG, 2025)                                  | L2 egress, **model reply executed**, recon burst, document staging                                                                     |
 | `jadepuffer` | LLM-agent intrusion: Langflow RCE, MinIO defaults, forged Nacos token, config encryption (Sysdig via Trend Micro, Jul 2026) | app-server shell, recon, beacon, default login, UA bypass, forged token, backdoor admin, mass SQL rewrite, DROP; agent claims verified |
-| `benign` | developer using sanctioned AI tools | nothing (false-positive control) |
+| `benign`     | developer using sanctioned AI tools                                                                                         | nothing (false-positive control)                                                                                                       |
 
 Note what `jadepuffer` teaches: the victim never contacted a model (the agent ran elsewhere), so L2 is blind and
 the other four invariants carry the detection. Defense in depth is not a slogan here; it is the design.
