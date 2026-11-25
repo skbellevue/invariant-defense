@@ -22,7 +22,30 @@ from pathlib import Path
 from invariant.util import sha256_file
 
 
-def create(sources: list[str], dest: str, label: str | None = None) -> Path:
+def make_immutable(paths: list[Path]) -> str:
+    """Best-effort OS immutability flag. macOS: ``chflags uchg`` (owner can set; undo with
+    ``chflags nouchg``). Linux: ``chattr +i`` (root only). Returns what was applied."""
+    import platform
+    import subprocess
+
+    files = [str(p) for p in paths]
+    if not files:
+        return "none"
+    system = platform.system()
+    if system == "Darwin":
+        cmd = ["chflags", "uchg", *files]
+    elif system == "Linux":
+        cmd = ["chattr", "+i", *files]
+    else:
+        return "unsupported"
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"failed: {exc}"
+    return " ".join(cmd[:2]) if proc.returncode == 0 else f"failed: {proc.stderr.strip()[:200]}"
+
+
+def create(sources: list[str], dest: str, label: str | None = None, immutable: bool = False) -> Path:
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     root = Path(dest) / f"{label or 'snapshot'}-{stamp}"
     root.mkdir(parents=True, exist_ok=False)
@@ -38,9 +61,11 @@ def create(sources: list[str], dest: str, label: str | None = None) -> Path:
             manifest[str(rel)] = {"sha256": sha256_file(str(target)), "size": target.stat().st_size}
     (root / "MANIFEST.json").write_text(json.dumps({"created": stamp, "files": manifest}, indent=2))
     # read-only: a speed bump, not immutability (see module docstring)
-    for p in root.rglob("*"):
-        if p.is_file():
-            p.chmod(stat.S_IRUSR | stat.S_IRGRP)
+    files = [p for p in root.rglob("*") if p.is_file()]
+    for p in files:
+        p.chmod(stat.S_IRUSR | stat.S_IRGRP)
+    if immutable:
+        (root.parent / f".{root.name}.immutable").write_text(make_immutable(files))
     return root
 
 

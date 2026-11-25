@@ -13,6 +13,7 @@ eBPF/auditd (Linux) telemetry instead and use the JSONL/Sysmon readers.
 from __future__ import annotations
 
 import socket
+import sys
 import time
 from collections.abc import Iterator
 
@@ -30,7 +31,12 @@ def build_ip_map(domains: list[str]) -> dict[str, str]:
     return ip_map
 
 
-def poll(domains: list[str], interval: float = 5.0, iterations: int | None = None) -> Iterator[Event]:
+def poll(
+    domains: list[str],
+    interval: float = 5.0,
+    iterations: int | None = None,
+    include_processes: bool = True,
+) -> Iterator[Event]:
     try:
         import psutil  # type: ignore
     except ImportError as exc:  # pragma: no cover - optional dependency
@@ -41,9 +47,14 @@ def poll(domains: list[str], interval: float = 5.0, iterations: int | None = Non
     seen_procs: set[tuple[int, float]] = set()
     seen_conns: set[tuple[int, str, int]] = set()
     n = 0
+    warned = False
     while iterations is None or n < iterations:
         now = time.time()
-        for p in psutil.process_iter(["pid", "ppid", "name", "exe", "cmdline", "username", "create_time"]):
+        for p in (
+            psutil.process_iter(["pid", "ppid", "name", "exe", "cmdline", "username", "create_time"])
+            if include_processes
+            else ()
+        ):
             info = p.info
             key = (info["pid"], info.get("create_time") or 0)
             if key not in seen_procs:
@@ -62,6 +73,13 @@ def poll(domains: list[str], interval: float = 5.0, iterations: int | None = Non
             conns = psutil.net_connections(kind="tcp")
         except (psutil.AccessDenied, PermissionError):
             conns = []
+            if not warned:
+                warned = True
+                print(
+                    "invariant: cannot list other processes' connections without root "
+                    "(macOS requires it); run with sudo or the L2 egress layer sees nothing",
+                    file=sys.stderr,
+                )
         for c in conns:
             if not c.raddr or c.pid is None:
                 continue

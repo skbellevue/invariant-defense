@@ -5,6 +5,8 @@ Every adapter is dry-run by default: it records exactly what it would do. Set
 
 * ``log``      record only (default)
 * ``iptables`` Linux host isolation, keeping management CIDRs reachable (run locally as root)
+* ``pf``       macOS host isolation through a pf anchor under ``com.apple/`` (run locally as root)
+* ``auto``     ``pf`` on macOS, ``iptables`` on Linux
 * ``webhook``  POST a JSON action request to your SOAR / EDR / ChatOps bridge
 * ``command``  run a configured shell template, e.g. ``edrctl contain {host}``
 
@@ -55,6 +57,46 @@ def iptables_isolation_commands(management_cidrs: list[str]) -> list[str]:
     return cmds
 
 
+PF_ANCHOR = "com.apple/invariant"  # evaluated by the stock /etc/pf.conf `anchor "com.apple/*"`
+
+
+def pf_isolation_rules(management_cidrs: list[str]) -> str:
+    """pf rules for the isolation anchor: loopback and management stay reachable, all else drops."""
+    rules = ["pass quick on lo0 all"]
+    for cidr in management_cidrs:
+        rules.append(f"pass out quick to {cidr} keep state")
+        rules.append(f"pass in quick from {cidr} keep state")
+    rules.append("block drop quick all")
+    return "\n".join(rules) + "\n"
+
+
+def pf_isolation_commands(management_cidrs: list[str]) -> list[list[str]]:
+    """argv lists (no shell): load the anchor, then enable pf (pfctl -E takes a reference)."""
+    return [["pfctl", "-a", PF_ANCHOR, "-f", "-"], ["pfctl", "-E"]]
+
+
+def pf_release_commands() -> list[list[str]]:
+    return [["pfctl", "-a", PF_ANCHOR, "-F", "all"]]
+
+
+def iptables_release_commands() -> list[str]:
+    return [
+        "iptables -D OUTPUT -j INVARIANT-ISOLATE",
+        "iptables -D INPUT -j INVARIANT-ISOLATE",
+        "iptables -F INVARIANT-ISOLATE",
+        "iptables -X INVARIANT-ISOLATE",
+    ]
+
+
+def resolve_adapter(adapter: str, system: str | None = None) -> str:
+    if adapter != "auto":
+        return adapter
+    import platform
+
+    system = system or platform.system()
+    return {"Darwin": "pf", "Linux": "iptables"}.get(system, "log")
+
+
 class Actions:
     def __init__(self, response_cfg: dict[str, Any]):
         self.cfg = response_cfg
@@ -64,7 +106,7 @@ class Actions:
 
     # ------------------------------------------------------------------ dispatch
     def run(self, step: str, alert: Alert) -> ActionResult:
-        adapter = self.adapters.get(step, "log")
+        adapter = resolve_adapter(self.adapters.get(step, "log"))
         target = self._target(step, alert)
         if self.dry or adapter == "log":
             return ActionResult(step, adapter, target, False, True, self._describe(step, adapter, alert))
@@ -75,6 +117,8 @@ class Actions:
                 return self._command(step, adapter, target, alert)
             if adapter == "iptables" and step == "isolate":
                 return self._iptables(step, adapter, target)
+            if adapter == "pf" and step == "isolate":
+                return self._pf(step, adapter, target)
         except Exception as exc:  # noqa: BLE001 - report, never crash the loop
             return ActionResult(step, adapter, target, True, False, f"error: {exc}")
         return ActionResult(
@@ -100,6 +144,9 @@ class Actions:
             if adapter == "iptables":
                 cmds = iptables_isolation_commands(self.cfg.get("management_cidrs", []))
                 return "would run: " + " && ".join(cmds[:3]) + " …"
+            if adapter == "pf":
+                rules = pf_isolation_rules(self.cfg.get("management_cidrs", [])).strip().replace("\n", "; ")
+                return f"would load pf anchor {PF_ANCHOR} [{rules}] and enable pf"
             return f"would network-isolate host {alert.host} (keep management channel)"
         if step == "revoke":
             what = self._target(step, alert)
@@ -140,6 +187,28 @@ class Actions:
         )
         with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 - operator-configured URL
             return ActionResult(step, adapter, target, True, 200 <= resp.status < 300, f"HTTP {resp.status}")
+
+    def _pf(self, step: str, adapter: str, target: str) -> ActionResult:
+        rules = pf_isolation_rules(self.cfg.get("management_cidrs", []))
+        load, enable = pf_isolation_commands(self.cfg.get("management_cidrs", []))
+        proc = subprocess.run(load, input=rules, capture_output=True, text=True, timeout=30)
+        if proc.returncode != 0:
+            return ActionResult(
+                step, adapter, target, True, False, f"pfctl load failed: {proc.stderr.strip()}"
+            )
+        proc = subprocess.run(enable, capture_output=True, text=True, timeout=30)
+        # pfctl -E prints "pf enabled" / "Token : N" on stderr even on success
+        ok = proc.returncode == 0
+        return ActionResult(
+            step,
+            adapter,
+            target,
+            True,
+            ok,
+            f"isolated locally via pf anchor {PF_ANCHOR}"
+            if ok
+            else f"pfctl -E failed: {proc.stderr.strip()}",
+        )
 
     def _iptables(self, step: str, adapter: str, target: str) -> ActionResult:
         cmds = iptables_isolation_commands(self.cfg.get("management_cidrs", []))

@@ -11,5 +11,8 @@ Detection logic and simulations are informed by public reporting. Paraphrased; s
 * Alibaba Cloud, *Important Nacos vulnerabilities* — default `token.secret.key` and `server.identity` remediation. https://help.aliyun.com/en/acsg/nacos-high-risk-vulnerability
 * CISA, Known Exploited Vulnerabilities catalog and JSON feed. https://www.cisa.gov/known-exploited-vulnerabilities-catalog
 * Check Point Research, *Caught in the Hook: RCE and API Token Exfiltration Through Claude Code Project Files*, 25 Feb 2026 (CVE-2025-59536, CVE-2026-21852). https://research.checkpoint.com/2026/rce-and-api-token-exfiltration-through-claude-code-project-files-cve-2025-59536/
+* Snyk, *Weaponizing AI Coding Agents for Malware in the Nx Malicious Package*, 27 Aug 2025 — s1ngularity AI-CLI abuse and shell-profile tampering (macOS replay). https://snyk.io/blog/weaponizing-ai-coding-agents-for-malware-in-the-nx-malicious-package
+* StepSecurity, *s1ngularity: Popular Nx Build System Package Compromised*, Aug 2025. https://www.stepsecurity.io/blog/supply-chain-security-alert-popular-nx-build-system-package-compromised-with-data-stealing-malware
+* Apple, eslogger(1) manual (macOS 13+): JSON modeled on es_message_t, no schema guarantee, root + Full Disk Access required. https://keith.github.io/xcode-man-pages/eslogger.1.html
 * MITRE ATT&CK T1027.014 Polymorphic Code. https://attack.mitre.org/techniques/T1027/014/
 * Key formats: public secret-scanning rule sets (gitleaks, GitLab secret detection) and provider documentation.

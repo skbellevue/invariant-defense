@@ -99,7 +99,7 @@ def cmd_demo(args) -> int:
 
 def cmd_simulate(args) -> int:
     from invariant.events import write_jsonl
-    from invariant.simulate import SCENARIOS
+    from invariant.simulate import ESLOGGER_SCENARIOS, SCENARIOS
 
     names = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
     out = Path(args.output)
@@ -107,6 +107,10 @@ def cmd_simulate(args) -> int:
     for n in names:
         count = write_jsonl(SCENARIOS[n](), out / f"{n}.jsonl")
         print(f"{n:12} {count:5} events -> {out / (n + '.jsonl')}")
+        if n in ESLOGGER_SCENARIOS:  # also the raw macOS form, for `--format eslogger`
+            raw = out / f"{n}.eslogger.jsonl"
+            raw.write_text("".join(json.dumps(r) + "\n" for r in ESLOGGER_SCENARIOS[n]()))
+            print(f"{'':12} {'':5}        -> {raw} (raw eslogger JSON)")
     return 0
 
 
@@ -301,8 +305,10 @@ def cmd_snapshot(args) -> int:
     from invariant.impact import snapshot
 
     if args.action == "create":
-        root = snapshot.create(args.paths, args.dest, args.label)
+        root = snapshot.create(args.paths, args.dest, args.label, immutable=args.immutable)
         print(f"Snapshot -> {root}")
+        if args.immutable:
+            print(f"Immutability: {(root.parent / f'.{root.name}.immutable').read_text()}")
         return 0
     if args.action == "verify":
         problems = snapshot.verify(args.paths[0])
@@ -360,6 +366,102 @@ def cmd_live(args) -> int:
     return 0
 
 
+def cmd_stream(args) -> int:
+    """Read telemetry line by line (stdin by default) and detect as events arrive.
+
+    macOS:  sudo eslogger exec create rename unlink close | invariant stream --format eslogger
+    """
+    import queue
+    import threading
+
+    from invariant.collectors import line_mapper
+
+    cfg = _cfg(args)
+    engine, loop = _engine(cfg, args.respond, args.execute, args.approval)
+    mapper = line_mapper(args.format)
+    q: queue.Queue = queue.Queue(maxsize=10_000)
+    done = object()
+
+    def read_lines():
+        fh = sys.stdin if args.events == "-" else open(args.events, encoding="utf-8", errors="replace")
+        try:
+            for line in fh:
+                try:
+                    ev = mapper(line)
+                except (ValueError, TypeError, KeyError):
+                    ev = None
+                if ev is not None:
+                    q.put(ev)
+        finally:
+            if fh is not sys.stdin:
+                fh.close()
+            q.put(done)
+
+    def sample_net():
+        from invariant.collectors.live import poll
+        from invariant.egress.catalog import EndpointCatalog
+
+        for ev in poll(
+            EndpointCatalog(cfg.catalog).all_domains(), args.net_interval, include_processes=False
+        ):
+            q.put(ev)
+
+    threading.Thread(target=read_lines, daemon=True).start()
+    if args.net_interval:
+        threading.Thread(target=sample_net, daemon=True).start()
+    print(
+        f"Streaming {args.format} from {'stdin' if args.events == '-' else args.events}"
+        + (f" + network sampling every {args.net_interval}s" if args.net_interval else ""),
+        file=sys.stderr,
+    )
+    n_seen, n_events = 0, 0
+    try:
+        while True:
+            item = q.get()
+            if item is done:
+                break
+            n_events += 1
+            engine.feed(item)
+            for a in engine.alerts[n_seen:]:
+                if SEVERITY_ORDER[a.severity] >= SEVERITY_ORDER[args.min_severity]:
+                    print(a.one_line(), flush=True)
+                    for act in a.actions:
+                        print(f"    ↳ {act['step']}: {act['detail']}", flush=True)
+            n_seen = len(engine.alerts)
+    except KeyboardInterrupt:
+        pass
+    engine.finish()
+    print(f"{n_events} events, {len(engine.alerts)} alerts", file=sys.stderr)
+    fail_on = args.fail_on
+    return 2 if fail_on and any(sev_at_least(a.severity, fail_on) for a in engine.alerts) else 0
+
+
+def cmd_unisolate(args) -> int:
+    """Undo local isolation made by the iptables or pf adapter."""
+    import subprocess
+
+    from invariant.response.actions import iptables_release_commands, pf_release_commands, resolve_adapter
+
+    adapter = resolve_adapter(args.adapter)
+    if adapter == "pf":
+        cmds = [" ".join(c) for c in pf_release_commands()]
+    elif adapter == "iptables":
+        cmds = iptables_release_commands()
+    else:
+        print(f"nothing to undo for adapter {adapter!r}", file=sys.stderr)
+        return 1
+    if not args.execute:
+        print("Would run (add --execute, as root):")
+        print("\n".join(f"  {c}" for c in cmds))
+        return 0
+    rc = 0
+    for c in cmds:
+        proc = subprocess.run(c, shell=True, capture_output=True, text=True)  # noqa: S602 - fixed commands
+        print(f"{'ok ' if proc.returncode == 0 else 'ERR'} {c} {proc.stderr.strip()}")
+        rc = rc or proc.returncode
+    return 0 if rc == 0 else 1
+
+
 # ---------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="invariant", description="Invariant Defense Model reference platform")
@@ -383,14 +485,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("detect", help="run detections on telemetry")
     sp.add_argument("--events", required=True)
-    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon"])
+    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger"])
     response_flags(sp)
     report_flags(sp)
     sp.set_defaults(func=cmd_detect)
 
     sp = sub.add_parser("demo", help="replay synthetic scenarios")
     sp.add_argument(
-        "--scenario", default="all", choices=["all", "promptflux", "lamehug", "jadepuffer", "benign"]
+        "--scenario",
+        default="all",
+        choices=["all", "promptflux", "lamehug", "jadepuffer", "s1ngularity", "benign"],
     )
     sp.add_argument("--respond", action="store_true")
     sp.add_argument("--approval", choices=["deny", "prompt", "file"])
@@ -398,7 +502,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_demo)
 
     sp = sub.add_parser("simulate", help="write synthetic telemetry as JSONL")
-    sp.add_argument("scenario", choices=["all", "promptflux", "lamehug", "jadepuffer", "benign"])
+    sp.add_argument(
+        "scenario", choices=["all", "promptflux", "lamehug", "jadepuffer", "s1ngularity", "benign"]
+    )
     sp.add_argument("-o", "--output", default="simulations")
     sp.set_defaults(func=cmd_simulate)
 
@@ -452,11 +558,35 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dest", default="./snapshots")
     sp.add_argument("--label")
     sp.add_argument("--scratch", default="./restore-test")
+    sp.add_argument(
+        "--immutable",
+        action="store_true",
+        help="also set the OS immutable flag (macOS chflags uchg; Linux chattr +i, root)",
+    )
     sp.set_defaults(func=cmd_snapshot)
 
     sp = sub.add_parser("catalog", help="export LLM endpoint catalog")
     sp.add_argument("--format", default="plain", choices=["plain", "squid", "rpz", "json"])
     sp.set_defaults(func=cmd_catalog)
+
+    sp = sub.add_parser("stream", help="detect on telemetry as it arrives (stdin by default)")
+    sp.add_argument("--events", default="-", help="file to read, or - for stdin (default)")
+    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger"])
+    sp.add_argument(
+        "--net-interval",
+        type=float,
+        default=0.0,
+        help="also sample network connections every N seconds with psutil (needs root on macOS)",
+    )
+    sp.add_argument("--min-severity", default="medium", choices=ORDER)
+    sp.add_argument("--fail-on", choices=ORDER)
+    response_flags(sp)
+    sp.set_defaults(func=cmd_stream)
+
+    sp = sub.add_parser("unisolate", help="undo local iptables/pf isolation")
+    sp.add_argument("--adapter", default="auto", choices=["auto", "pf", "iptables"])
+    sp.add_argument("--execute", action="store_true")
+    sp.set_defaults(func=cmd_unisolate)
 
     sp = sub.add_parser("live", help="poll this machine (psutil)")
     sp.add_argument("--interval", type=float, default=5.0)

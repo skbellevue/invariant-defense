@@ -44,6 +44,9 @@ egress:
     - ruby
     - lua
     - osascript
+    - osacompile
+    - swift
+    - zsh
     - bash
     - sh
     - curl
@@ -65,10 +68,10 @@ behavior:
   recon_min_distinct: 4
   staging_window_s: 600
   staging_min_files: 15
-  command_shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, fish]
-  shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, wscript.exe, cscript.exe, mshta.exe, python, python3, "python3.*", python.exe, node, node.exe, lua, perl, osascript]
-  script_extensions: [.vbs, .vbe, .js, .jse, .wsf, .hta, .ps1, .psm1, .bat, .cmd, .py, .lua, .sh, .rb, .pl, .applescript, .scpt]
-  document_extensions: [.doc, .docx, .xls, .xlsx, .ppt, .pptx, .pdf, .txt, .rtf, .csv, .odt, .key, .pages]
+  command_shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, fish, ksh, tcsh, csh]
+  shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, wscript.exe, cscript.exe, mshta.exe, python, python3, "python3.*", python.exe, node, node.exe, lua, perl, osascript, ksh, tcsh, csh, swift]
+  script_extensions: [.vbs, .vbe, .js, .jse, .wsf, .hta, .ps1, .psm1, .bat, .cmd, .py, .lua, .sh, .rb, .pl, .applescript, .scpt, .command, .zsh, .tool]
+  document_extensions: [.doc, .docx, .xls, .xlsx, .ppt, .pptx, .pdf, .txt, .rtf, .csv, .odt, .key, .pages, .numbers]
   recon_commands:
     - whoami
     - systeminfo
@@ -99,6 +102,18 @@ behavior:
     - "Get-ADComputer"
     - "Get-Process"
     - "Get-Service"
+    # macOS
+    - sw_vers
+    - system_profiler
+    - dscl
+    - "scutil --get"
+    - networksetup
+    - "csrutil status"
+    - "spctl --status"
+    - "fdesetup status"
+    - "security list-keychains"
+    - ioreg
+    - "launchctl list"
   # Application servers that should never spawn shells / decoders.
   app_servers:
     # dedicated server binaries, matched by name alone
@@ -107,15 +122,23 @@ behavior:
     cmdline_markers: [langflow, nacos, flowise, n8n, dify, comfyui, open-webui, jupyter, airflow, uvicorn, gunicorn, catalina]
   app_server_children: [sh, bash, dash, zsh, cmd.exe, powershell.exe, pwsh, curl, wget, base64, certutil.exe, nc, ncat, socat, python, python3, perl]
   # AI command-line tools that malware can drive (QUIETVAULT pattern).
-  ai_clis: [claude, claude.exe, gemini, gemini.exe, codex, codex.exe, copilot, aider, ollama, ollama.exe, llm, sgpt, opencode]
-  ai_cli_expected_parents: [bash, zsh, fish, sh, pwsh, powershell.exe, cmd.exe, windowsterminal.exe, code, code.exe, cursor, cursor.exe, tmux*, iterm*, terminal, alacritty, kitty, wezterm*, node, node.exe, login, sshd]
+  ai_clis: [claude, claude.exe, gemini, gemini.exe, codex, codex.exe, copilot, aider, ollama, ollama.exe, llm, sgpt, opencode, q, cursor-agent]
+  ai_cli_expected_parents: [bash, zsh, fish, sh, pwsh, powershell.exe, cmd.exe, windowsterminal.exe, code, code.exe, cursor, cursor.exe, tmux*, iterm*, terminal, alacritty, kitty, wezterm*, node, node.exe, login, sshd, ghostty, warp*, "code helper*", "cursor helper*", electron, launchd]
   # Tools allowed to write-then-run scripts (build systems, IDEs, package managers).
-  dev_tools: [code, code.exe, cursor, cursor.exe, pycharm*, idea*, git, git.exe, make, cmake, msbuild.exe, npm, npm.exe, pip, pip3, uv, poetry, cargo, go, gradle*, mvn*]
+  dev_tools: [code, code.exe, cursor, cursor.exe, "code helper*", "cursor helper*", pycharm*, idea*, git, git.exe, make, cmake, msbuild.exe, npm, npm.exe, pip, pip3, uv, poetry, cargo, go, gradle*, mvn*, xcodebuild, swift-build, swiftc, brew, xcode]
   persistence_paths:
     - "*/start menu/programs/startup/*"
     - "*/microsoft/windows/start menu/programs/startup/*"
     - "*/library/launchagents/*"
     - "*/library/launchdaemons/*"
+    - "*/library/startupitems/*"
+    - "/private/var/at/tabs/*"
+    - "*/library/application support/com.apple.backgroundtaskmanagementagent/*"
+    - "/etc/periodic/*"
+    - "*/.zprofile"
+    - "*/.zshenv"
+    - "*/.zlogin"
+    - "*/.bash_profile"
     - "/etc/cron*"
     - "/var/spool/cron/*"
     - "*/.config/systemd/user/*"
@@ -124,7 +147,10 @@ behavior:
     - "*/.bashrc"
     - "*/.zshrc"
     - "*/.profile"
+  # macOS: /Volumes holds external drives and mounted shares; the boot volume and
+  # Time Machine are excluded by the detector's macos_system_volumes list below.
   removable_paths: ["[d-z]:/*", "/media/*", "/mnt/usb*", "/volumes/*", "//*"]
+  macos_system_volumes: ["/volumes/macintosh hd*", "/volumes/.timemachine*", "/volumes/com.apple.timemachine*", "/volumes/recovery*"]
   narration_markers:
     - "step 1:"
     - "step 2:"

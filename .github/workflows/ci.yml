@@ -80,3 +80,32 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t invariant-defense .
       - run: docker run --rm invariant-defense demo --scenario lamehug
+
+  macos:
+    runs-on: macos-latest   # Apple silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - name: Tests (includes chflags immutability and pf adapter resolution on macOS)
+        run: pytest -o addopts="" -q
+      - name: Compile YARA rules
+        run: python -c "import yara,glob; [yara.compile(filepath=f) for f in glob.glob('rules/yara/*.yar')]"
+      - name: eslogger pipeline end to end (recorded eslogger JSON)
+        run: |
+          invariant simulate s1ngularity -o "$RUNNER_TEMP/sim"
+          set +e
+          invariant detect --format eslogger --events "$RUNNER_TEMP/sim/s1ngularity.eslogger.jsonl" --fail-on critical
+          test $? -eq 2
+          invariant stream --format eslogger --events "$RUNNER_TEMP/sim/s1ngularity.eslogger.jsonl" --fail-on critical
+          test $? -eq 2
+      - name: pf isolation (dry run) and benign control
+        run: |
+          invariant unisolate --adapter auto | grep -q "pfctl -a com.apple/invariant"
+          invariant demo --scenario benign --fail-on low
+      - name: eslogger is present on this runner (informational)
+        continue-on-error: true
+        run: eslogger --list-events | grep -E '^(exec|create|rename|unlink|close)$'
