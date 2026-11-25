@@ -22,6 +22,7 @@ artifact for a signature to match. But AI lets an attacker change the **form** o
 Everything runs on the Python standard library plus PyYAML. `yara-python` and `psutil` are optional.
 
 > **Status.** Reference implementation for learning, labs and as a starting point for production engineering.
+> Supports **Linux** and **Windows**; **macOS** support is still in progress.
 > The detections are deliberately transparent and tested against synthetic telemetry modeled on public reporting.
 > Tune thresholds and allow-lists for your environment before you let the response loop execute anything.
 
@@ -115,7 +116,7 @@ docs/          architecture, detection catalog, deployment, governance metrics, 
 See [docs/deployment.md](docs/deployment.md). In short:
 
 1. **Telemetry.** Windows: Sysmon with `deploy/sysmon-invariant.xml` merged in. Linux: auditd/eBPF exporter to JSONL.
-   macOS: Endpoint Security-based agent to JSONL. Proxy/AI-gateway logs as `http_request`. Database audit logs as `sql`.
+   macOS _(in progress)_: Endpoint Security-based agent to JSONL. Proxy/AI-gateway logs as `http_request`. Database audit logs as `sql`.
 2. **Policy.** Write your egress allow-list (`config/invariant.example.yaml`). Route all sanctioned model traffic
    through one AI gateway; everything else reaching a provider is either shadow AI or malware.
 3. **Inventory.** Fill in `ai-estate.yaml`, run `exposure` and `creds` weekly, fix criticals in days.
