@@ -24,12 +24,12 @@ Static hunting (`invariant hunt`, `rules/yara`): `HUNT-LLM-EXEC`, `HUNT-LLM-EVAS
 | INV-L3-001 | Process (or ancestor) made an unsanctioned model call, then spawned a shell/interpreter within the window | critical | T1059, T1027.014 | LAMEHUG/PROMPTSTEAL, PromptLock |
 | INV-L3-002 | Script written minutes ago is executed (writer not a dev tool) | high; critical with model call | T1059 | generated-code loaders |
 | INV-L3-003 | One script rewritten into ≥3 distinct hashes (self-referencing or model-fed) | high; critical with model call | T1027.014 | PROMPTFLUX hourly rewrite |
-| INV-L3-004 | Script/binary written to an autostart location | medium → critical | T1547.001, T1053 | PROMPTFLUX Startup copy |
+| INV-L3-004 | Script/binary written to an autostart location (Startup, LaunchAgents/Daemons, cron, systemd, shell profiles) | medium → critical | T1547.001, T1543.001/.004, T1546.004, T1053.003 | PROMPTFLUX Startup copy; s1ngularity `.zshrc` tampering |
 | INV-L3-005 | Script copied to removable media or a share | high | T1091 | PROMPTFLUX propagation |
 | INV-L3-006 | App server (Langflow, Nacos, Flowise, n8n…) spawns shell/downloader/decoder | high; critical with decode or pipe-to-shell | T1190, T1059, T1140 | JADEPUFFER initial access |
 | INV-L3-007 | ≥4 distinct discovery commands from one driver process within 120 s | medium; critical with model call | T1082, T1016, T1033, T1057 | LAMEHUG one-liners |
 | INV-L3-008 | ≥15 documents written into one directory within 10 min | medium; high with model call | T1074.001 | LAMEHUG `C:\ProgramData\info` |
-| INV-L3-009 | AI CLI started by an unexpected parent or with secret-hunting prompt + approval bypass | high / critical | T1059, T1552.001 | QUIETVAULT |
+| INV-L3-009 | AI CLI started by an unexpected parent or with secret-hunting prompt + approval bypass (`--dangerously-skip-permissions`, `--yolo`, `--trust-all-tools`) | high / critical | T1059, T1552.001 | QUIETVAULT; Nx s1ngularity |
 | INV-L3-010 | Low-jitter periodic connections to a non-model destination | high | T1071.001, T1053 | JADEPUFFER 30-minute beacon |
 | INV-L3-011 | Natural-language agent narration in a command, script or SQL | low (lead only) | T1059 | JADEPUFFER "High-ROI" comments |
 

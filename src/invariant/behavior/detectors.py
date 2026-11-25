@@ -50,6 +50,31 @@ class _Base(Detector):
         return glob_any(name, self.shells)
 
 
+def _persistence_technique(path: str) -> list[str]:
+    p = path.lower()
+    if "/launchagents/" in p:
+        return ["T1543.001"]
+    if "/launchdaemons/" in p:
+        return ["T1543.004"]
+    if p.rsplit("/", 1)[-1] in (
+        ".bashrc",
+        ".zshrc",
+        ".profile",
+        ".zprofile",
+        ".zshenv",
+        ".zlogin",
+        ".bash_profile",
+    ):
+        return ["T1546.004"]
+    if "cron" in p or "/var/at/tabs/" in p or "/etc/periodic/" in p:
+        return ["T1053.003"]
+    if "systemd" in p:
+        return ["T1543.002"]
+    if "startup" in p:
+        return ["T1547.001"]
+    return ["T1547"]
+
+
 # --------------------------------------------------------------------- 001
 class QueryThenExecDetector(_Base):
     name = "query-then-exec"
@@ -103,6 +128,7 @@ class ScriptLifecycleDetector(_Base):
         self.q_window = float(self.cfg.get("query_then_exec_window_s", 300)) * 12  # regeneration can be slow
         self.persist = self.cfg.get("persistence_paths", [])
         self.removable = self.cfg.get("removable_paths", [])
+        self.system_volumes = self.cfg.get("macos_system_volumes", [])
         # (host, path) -> (ts, writer pid, writer image)
         self.recent: dict[tuple[str, str], tuple[float, int | None, str]] = {}
         # (host, path) -> set of hashes
@@ -184,7 +210,7 @@ class ScriptLifecycleDetector(_Base):
                     ev.ts,
                     "A file was placed where the OS will run it at logon/boot. PROMPTFLUX copied each regenerated "
                     "script into the Startup folder.",
-                    ["T1547.001"] if "startup" in path else ["T1053", "T1547.001"],
+                    _persistence_technique(path),
                     {
                         "path": ev.path,
                         "writer": writer,
@@ -197,7 +223,12 @@ class ScriptLifecycleDetector(_Base):
             )
 
         # 005 propagation
-        if is_script and glob_any(path, self.removable) and writer not in ("explorer.exe", "finder"):
+        if (
+            is_script
+            and glob_any(path, self.removable)
+            and not glob_any(path, self.system_volumes)
+            and writer not in ("explorer.exe", "finder")
+        ):
             first = self.sha_paths.get((ev.host, ev.sha256 or ""), path)
             out.append(
                 Alert(
@@ -438,10 +469,11 @@ class StagingDetector(_Base):
 class AiCliAbuseDetector(_Base):
     name = "ai-cli-abuse"
     _risky_flags = re.compile(
-        r"--dangerously-skip-permissions|--yolo|--full-auto|bypasspermissions|--allow-all-tools", re.I
+        r"--dangerously-skip-permissions|--yolo|--full-auto|bypasspermissions|--allow-all-tools|--trust-all-tools",
+        re.I,
     )
     _secret_hunt = re.compile(
-        r"\b(api[_ -]?keys?|tokens?|passwords?|secrets?|credentials?|wallets?|seed phrase|private keys?|\.env|id_rsa|\.npmrc|\.aws)\b",
+        r"(?<!\w)(api[_ -]?keys?|tokens?|passwords?|secrets?|credentials?|wallets?|keystores?|seed phrase|private keys?|\.env|id_rsa|\.npmrc|\.aws)(?!\w)",
         re.I,
     )
 

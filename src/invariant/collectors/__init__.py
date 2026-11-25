@@ -14,4 +14,44 @@ def load(path: str, fmt: str = "jsonl") -> Iterator[Event]:
         from invariant.collectors.sysmon import read_sysmon
 
         return read_sysmon(path)
-    raise ValueError(f"unknown format {fmt!r} (expected jsonl or sysmon)")
+    if fmt == "eslogger":
+        from invariant.collectors.eslogger import read_eslogger
+
+        return read_eslogger(path)
+    raise ValueError(f"unknown format {fmt!r} (expected jsonl, sysmon or eslogger)")
+
+
+FORMATS = ("jsonl", "sysmon", "eslogger")
+
+
+def line_mapper(fmt: str, host: str | None = None):
+    """Return a function mapping one raw text line to an Event (or None), for streaming."""
+    import json
+    import socket
+
+    host = host or socket.gethostname()
+    if fmt == "jsonl":
+
+        def _m(line: str):
+            line = line.strip()
+            return Event.from_dict(json.loads(line)) if line and not line.startswith("#") else None
+
+        return _m
+    if fmt == "sysmon":
+        from invariant.collectors.sysmon import map_record as sysmon_map
+
+        return lambda line: sysmon_map(json.loads(line)) if line.strip() else None
+    if fmt == "eslogger":
+        from invariant.collectors.eslogger import map_record as es_map
+
+        def _e(line: str):
+            line = line.strip()
+            if not line.startswith("{"):
+                return None
+            try:
+                return es_map(json.loads(line), host)
+            except ValueError:
+                return None
+
+        return _e
+    raise ValueError(f"unknown format {fmt!r}")

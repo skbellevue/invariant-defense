@@ -32,6 +32,12 @@ TECHNIQUES = {
     "T1606": "Forge Web Credentials",
     "T1606.001": "Forge Web Credentials: Web Cookies",
     "T1053": "Scheduled Task/Job",
+    "T1053.003": "Scheduled Task/Job: Cron",
+    "T1543.001": "Create or Modify System Process: Launch Agent",
+    "T1543.002": "Create or Modify System Process: Systemd Service",
+    "T1543.004": "Create or Modify System Process: Launch Daemon",
+    "T1546.004": "Event Triggered Execution: Unix Shell Configuration Modification",
+    "T1547": "Boot or Logon Autostart Execution",
     "T1562": "Impair Defenses",
     "T1204": "User Execution",
 }

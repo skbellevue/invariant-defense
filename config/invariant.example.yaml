@@ -38,7 +38,8 @@ response:
   approval: file
   approval_dir: ./approvals
   adapters:
-    isolate: webhook         # e.g. your SOAR endpoint that calls the EDR "contain host" API
+    isolate: webhook         # e.g. your SOAR endpoint that calls the EDR "contain host" API;
+                             # or auto: local pf (macOS) / iptables (Linux), run as root
     revoke: command
     notify: webhook
   webhook_url: https://soar.example.com/hooks/invariant
