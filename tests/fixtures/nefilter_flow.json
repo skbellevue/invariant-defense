@@ -1,0 +1,22 @@
+{
+  "kind": "network_connect",
+  "ts": 1795683600.25,
+  "host": "mac-dev-07",
+  "user": "uid:501",
+  "pid": 7200,
+  "ppid": 7100,
+  "image": "/opt/homebrew/bin/claude",
+  "signed": true,
+  "dst_host": "api.anthropic.com",
+  "dst_ip": "160.79.104.10",
+  "dst_port": 443,
+  "fields": {
+    "source": "nefilter",
+    "protocol": "tcp",
+    "direction": "outbound",
+    "flow_id": "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+    "signing_id": "com.anthropic.claude-code",
+    "team_id": "ABCDE12345",
+    "platform_binary": false
+  }
+}

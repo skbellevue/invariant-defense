@@ -9,7 +9,7 @@ JSON; validate the eslogger field layout on your macOS version before relying on
 | Layer | Telemetry on macOS | Coverage |
 |---|---|---|
 | L1 Exposure | inventory YAML (OS-independent) | full |
-| L2 Model dependency | `psutil` connection sampling as root (`--net-interval`), AI gateway / proxy logs | partial: sampling misses short connections; Endpoint Security has no network events |
+| L2 Model dependency | Invariant Network Extension (`--nefilter-log`, see [macos-network-extension.md](macos-network-extension.md)); fallback `psutil` sampling as root (`--net-interval`); AI gateway / proxy logs | full with the Network Extension; partial with sampling (misses short connections) |
 | L2 Hunting | `invariant hunt` on files, repos, `~/.claude`, `.mcp.json`, `.cursor/` | full |
 | L3 Behavior | `eslogger` exec / create / close / rename / unlink | full set of L3 detectors, plus code-signing state |
 | L4 Identity | IdP, gateway and app logs (OS-independent) | full |
@@ -122,8 +122,9 @@ If paths or pids come out empty, open an issue with a redacted sample line.
 
 ## Known limits
 
-* **No network events from Endpoint Security.** Use `--net-interval` sampling, AI-gateway logs, or a
-  Network Extension content filter that writes `network_connect` JSONL (planned).
+* **No network events from Endpoint Security.** Install the Invariant Network Extension
+  ([macos-network-extension.md](macos-network-extension.md)) and add `--nefilter-log`; without it,
+  use `--net-interval` sampling or AI-gateway logs.
 * **Volume.** `close` and `create` are busy on developer machines. If needed, pre-filter with
   `jq` (for example drop `/private/var/folders/` and `~/Library/Caches/`) before `invariant stream`.
 * **`write` events** fire per write call; the default pipeline uses `close` with `modified: true`.

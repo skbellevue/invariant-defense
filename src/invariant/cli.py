@@ -99,7 +99,7 @@ def cmd_demo(args) -> int:
 
 def cmd_simulate(args) -> int:
     from invariant.events import write_jsonl
-    from invariant.simulate import ESLOGGER_SCENARIOS, SCENARIOS
+    from invariant.simulate import ESLOGGER_SCENARIOS, NEFILTER_SCENARIOS, SCENARIOS
 
     names = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
     out = Path(args.output)
@@ -111,6 +111,10 @@ def cmd_simulate(args) -> int:
             raw = out / f"{n}.eslogger.jsonl"
             raw.write_text("".join(json.dumps(r) + "\n" for r in ESLOGGER_SCENARIOS[n]()))
             print(f"{'':12} {'':5}        -> {raw} (raw eslogger JSON)")
+        if n in NEFILTER_SCENARIOS:
+            nf = out / f"{n}.nefilter.jsonl"
+            nf.write_text("".join(json.dumps(r) + "\n" for r in NEFILTER_SCENARIOS[n]()))
+            print(f"{'':12} {'':5}        -> {nf} (Network Extension flow records)")
     return 0
 
 
@@ -341,6 +345,10 @@ def cmd_catalog(args) -> int:
             print(f"{d} CNAME .\n*.{d} CNAME .")
     elif args.format == "json":
         print(json.dumps(cfg.catalog, indent=2, default=str))
+    elif args.format == "nefilter":
+        from invariant.collectors.nefilter import export_config
+
+        print(json.dumps(export_config(cfg.catalog, args.nefilter_mode), indent=2))
     return 0
 
 
@@ -366,26 +374,74 @@ def cmd_live(args) -> int:
     return 0
 
 
-def cmd_stream(args) -> int:
-    """Read telemetry line by line (stdin by default) and detect as events arrive.
+def _follow(path: str, from_start: bool = False, poll_s: float = 0.5, stop=None):
+    """tail -F: yield lines appended to ``path``, surviving rotation and late creation."""
+    import os
+    import time
 
-    macOS:  sudo eslogger exec create rename unlink close | invariant stream --format eslogger
+    fh, ino = None, None
+    while stop is None or not stop.is_set():
+        if fh is None:
+            try:
+                fh = open(path, encoding="utf-8", errors="replace")
+                ino = os.fstat(fh.fileno()).st_ino
+                if not from_start:
+                    fh.seek(0, os.SEEK_END)
+                from_start = True  # after a rotation, read the new file from its start
+            except OSError:
+                time.sleep(poll_s)
+                continue
+        line = fh.readline()
+        if line:
+            yield line
+            continue
+        try:
+            st = os.stat(path)
+            if st.st_ino != ino or st.st_size < fh.tell():  # rotated or truncated
+                fh.close()
+                fh = None
+                continue
+        except OSError:
+            fh.close()
+            fh = None
+        time.sleep(poll_s)
+
+
+def cmd_stream(args) -> int:
+    """Detect on telemetry as it arrives, from several sources at once.
+
+    macOS, both sensors (Endpoint Security for processes and files, the Network
+    Extension for connections):
+
+        sudo eslogger exec create rename unlink close \\
+          | sudo invariant stream --format eslogger --nefilter-log
+
+    Events from different sources arrive with different latencies; a short reorder
+    buffer (--reorder-ms) puts them back in timestamp order before detection, so a
+    model call logged a moment after the exec it led to is still joined to it.
     """
+    import heapq
+    import itertools
     import queue
+    import subprocess
     import threading
+    import time
 
     from invariant.collectors import line_mapper
 
     cfg = _cfg(args)
     engine, loop = _engine(cfg, args.respond, args.execute, args.approval)
-    mapper = line_mapper(args.format)
-    q: queue.Queue = queue.Queue(maxsize=10_000)
+    q: queue.Queue = queue.Queue(maxsize=50_000)
     done = object()
+    stop = threading.Event()
+    sources: list[str] = []
 
-    def read_lines():
-        fh = sys.stdin if args.events == "-" else open(args.events, encoding="utf-8", errors="replace")
+    def pump(lines, fmt: str, signal_done: bool):
+        mapper = line_mapper(fmt)
         try:
-            for line in fh:
+            for line in lines:
+                if stop.is_set():
+                    break
                 try:
                     ev = mapper(line)
                 except (ValueError, TypeError, KeyError):
@@ -393,43 +449,99 @@ def cmd_stream(args) -> int:
                 if ev is not None:
                     q.put(ev)
         finally:
-            if fh is not sys.stdin:
-                fh.close()
-            q.put(done)
+            if signal_done:
+                q.put(done)
 
-    def sample_net():
-        from invariant.collectors.live import poll
-        from invariant.egress.catalog import EndpointCatalog
+    others = bool(args.follow or args.nefilter_log or args.net_interval)
+    primary = args.events != "none" and not (args.events == "-" and sys.stdin.isatty() and others)
+    if primary:
+        fh = sys.stdin if args.events == "-" else open(args.events, encoding="utf-8", errors="replace")
+        threading.Thread(target=pump, args=(fh, args.format, True), daemon=True).start()
+        sources.append(f"{args.format}:{'stdin' if args.events == '-' else args.events}")
+    for spec in args.follow or []:
+        fmt, _, path = spec.partition(":")
+        if not path:
+            print(f"--follow expects FORMAT:PATH, got {spec!r}", file=sys.stderr)
+            return 1
+        line_mapper(fmt)  # validate early
+        threading.Thread(
+            target=pump, args=(_follow(path, args.from_start, stop=stop), fmt, False), daemon=True
+        ).start()
+        sources.append(f"{fmt}:{path} (follow)")
+    proc = None
+    if args.nefilter_log:
+        from invariant.collectors.nefilter import LOG_STREAM_CMD
 
-        for ev in poll(
-            EndpointCatalog(cfg.catalog).all_domains(), args.net_interval, include_processes=False
-        ):
-            q.put(ev)
-
-    threading.Thread(target=read_lines, daemon=True).start()
+        try:
+            proc = subprocess.Popen(
+                LOG_STREAM_CMD, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+            )
+        except OSError as exc:
+            print(f"cannot start `log stream` (macOS only): {exc}", file=sys.stderr)
+            return 1
+        threading.Thread(target=pump, args=(proc.stdout, "nefilter", False), daemon=True).start()
+        sources.append("nefilter:unified log")
     if args.net_interval:
+
+        def sample_net():
+            from invariant.collectors.live import poll
+            from invariant.egress.catalog import EndpointCatalog
+
+            domains = EndpointCatalog(cfg.catalog).all_domains()
+            for ev in poll(domains, args.net_interval, include_processes=False):
+                if stop.is_set():
+                    break
+                q.put(ev)
+
         threading.Thread(target=sample_net, daemon=True).start()
-    print(
-        f"Streaming {args.format} from {'stdin' if args.events == '-' else args.events}"
-        + (f" + network sampling every {args.net_interval}s" if args.net_interval else ""),
-        file=sys.stderr,
-    )
+        sources.append(f"psutil every {args.net_interval}s")
+    if not sources:
+        print("no sources: give --events, --follow, --nefilter-log or --net-interval", file=sys.stderr)
+        return 1
+    print("Streaming " + " + ".join(sources), file=sys.stderr)
+
+    delay = args.reorder_ms / 1000.0
+    heap: list = []
+    seq = itertools.count()
     n_seen, n_events = 0, 0
+
+    def release(all_items: bool = False):
+        nonlocal n_seen, n_events
+        now = time.monotonic()
+        while heap and (all_items or now - heap[0][2] >= delay or len(heap) > 20_000):
+            # pop the earliest timestamp among events that have waited long enough
+            _, _, _, ev = heapq.heappop(heap)
+            n_events += 1
+            engine.feed(ev)
+        for a in engine.alerts[n_seen:]:
+            if SEVERITY_ORDER[a.severity] >= SEVERITY_ORDER[args.min_severity]:
+                print(a.one_line(), flush=True)
+                for act in a.actions:
+                    print(f"    ↳ {act['step']}: {act['detail']}", flush=True)
+        n_seen = len(engine.alerts)
+
     try:
         while True:
-            item = q.get()
+            try:
+                item = q.get(timeout=max(delay / 2, 0.05))
+            except queue.Empty:
+                release()
+                continue
             if item is done:
                 break
-            n_events += 1
-            engine.feed(item)
-            for a in engine.alerts[n_seen:]:
-                if SEVERITY_ORDER[a.severity] >= SEVERITY_ORDER[args.min_severity]:
-                    print(a.one_line(), flush=True)
-                    for act in a.actions:
-                        print(f"    ↳ {act['step']}: {act['detail']}", flush=True)
-            n_seen = len(engine.alerts)
+            # heap order: event time; arrival time decides when it may leave the buffer
+            heapq.heappush(heap, (item.ts, next(seq), time.monotonic(), item))
+            if delay == 0:
+                release(all_items=True)
+            else:
+                release()
     except KeyboardInterrupt:
         pass
+    finally:
+        stop.set()
+        if proc is not None:
+            proc.terminate()
+    release(all_items=True)
     engine.finish()
     print(f"{n_events} events, {len(engine.alerts)} alerts", file=sys.stderr)
     fail_on = args.fail_on
@@ -485,7 +597,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("detect", help="run detections on telemetry")
     sp.add_argument("--events", required=True)
-    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger"])
+    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger", "nefilter"])
     response_flags(sp)
     report_flags(sp)
     sp.set_defaults(func=cmd_detect)
@@ -566,17 +678,41 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_snapshot)
 
     sp = sub.add_parser("catalog", help="export LLM endpoint catalog")
-    sp.add_argument("--format", default="plain", choices=["plain", "squid", "rpz", "json"])
+    sp.add_argument("--format", default="plain", choices=["plain", "squid", "rpz", "json", "nefilter"])
+    sp.add_argument(
+        "--nefilter-mode",
+        default="catalog",
+        choices=["catalog", "all"],
+        help="for --format nefilter: report only model endpoints, or every outbound flow",
+    )
     sp.set_defaults(func=cmd_catalog)
 
-    sp = sub.add_parser("stream", help="detect on telemetry as it arrives (stdin by default)")
-    sp.add_argument("--events", default="-", help="file to read, or - for stdin (default)")
-    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger"])
+    sp = sub.add_parser("stream", help="detect on telemetry as it arrives, from one or more sources")
+    sp.add_argument("--events", default="-", help="primary source: file, - for stdin (default), or none")
+    sp.add_argument("--format", default="jsonl", choices=["jsonl", "sysmon", "eslogger", "nefilter"])
+    sp.add_argument(
+        "--follow",
+        action="append",
+        metavar="FORMAT:PATH",
+        help="also tail a growing file (repeatable), e.g. nefilter:/path/flows.jsonl",
+    )
+    sp.add_argument("--from-start", action="store_true", help="--follow reads existing content first")
+    sp.add_argument(
+        "--nefilter-log",
+        action="store_true",
+        help="macOS: also read Invariant Network Extension records from the unified log (root)",
+    )
     sp.add_argument(
         "--net-interval",
         type=float,
         default=0.0,
         help="also sample network connections every N seconds with psutil (needs root on macOS)",
+    )
+    sp.add_argument(
+        "--reorder-ms",
+        type=int,
+        default=1500,
+        help="buffer to re-order events from sources with different latency (0 = off)",
     )
     sp.add_argument("--min-severity", default="medium", choices=ORDER)
     sp.add_argument("--fail-on", choices=ORDER)

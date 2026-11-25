@@ -22,7 +22,7 @@ artifact for a signature to match. But AI lets an attacker change the **form** o
 Everything runs on the Python standard library plus PyYAML. `yara-python` and `psutil` are optional.
 
 > **Status.** Reference implementation for learning, labs and as a starting point for production engineering.
-> Supports **Linux**, **Windows** and **macOS** (beta: Endpoint Security via Apple's `eslogger`, `pf` isolation; see [docs/macos.md](docs/macos.md)).
+> Supports **Linux**, **Windows** and **macOS** (beta: Endpoint Security via Apple's `eslogger`, process-attributed connections via the bundled Network Extension, `pf` isolation; see [docs/macos.md](docs/macos.md) and [docs/macos-network-extension.md](docs/macos-network-extension.md)).
 > The detections are deliberately transparent and tested against synthetic telemetry modeled on public reporting.
 > Tune thresholds and allow-lists for your environment before you let the response loop execute anything.
 
@@ -57,7 +57,7 @@ the other four invariants carry the detection. Defense in depth is not a slogan 
 # Detection on your telemetry (normalized JSONL or Sysmon JSON / Winlogbeat)
 invariant detect --events telemetry.jsonl --respond --json report.json --learned learned.yaml
 invariant detect --events sysmon.json --format sysmon --fail-on high      # CI / pipeline gate
-sudo eslogger exec create rename unlink close | invariant stream --format eslogger   # macOS, live
+sudo eslogger exec create rename unlink close | sudo invariant stream --format eslogger --nefilter-log   # macOS, live
 
 # L1 exposure: inventory vs. vulnerabilities, KEV, defaults, patch age
 invariant kev-sync -o kev.json

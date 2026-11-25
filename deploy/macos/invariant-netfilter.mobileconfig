@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  MDM template for the Invariant network filter. Replace every REPLACE_ value:
+    REPLACE_TEAMID                your Apple Developer Team ID (10 characters)
+    REPLACE_DESIGNATED_REQUIREMENT output of: codesign -d -r- "/Applications/InvariantNetFilter.app/Contents/Library/SystemExtensions/com.skbellevue.invariant.netfilter.extension.systemextension"
+    REPLACE_UUID_1..3              fresh UUIDs (uuidgen)
+  VendorConfig/config is the JSON printed by: invariant catalog (format nefilter), or {} for all flows.
+  Deploy with your MDM; manual install is for testing only. The profile pre-approves the
+  system extension and the content filter so users see no prompts.
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadDisplayName</key><string>Invariant Network Filter</string>
+  <key>PayloadIdentifier</key><string>com.skbellevue.invariant.netfilter.profile</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>REPLACE_UUID_1</string>
+  <key>PayloadVersion</key><integer>1</integer>
+  <key>PayloadScope</key><string>System</string>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key><string>com.apple.system-extension-policy</string>
+      <key>PayloadIdentifier</key><string>com.skbellevue.invariant.netfilter.sysext</string>
+      <key>PayloadUUID</key><string>REPLACE_UUID_2</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>AllowedSystemExtensions</key>
+      <dict>
+        <key>REPLACE_TEAMID</key>
+        <array><string>com.skbellevue.invariant.netfilter.extension</string></array>
+      </dict>
+      <key>AllowedSystemExtensionTypes</key>
+      <dict>
+        <key>REPLACE_TEAMID</key>
+        <array><string>NetworkExtension</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>PayloadType</key><string>com.apple.webcontent-filter</string>
+      <key>PayloadIdentifier</key><string>com.skbellevue.invariant.netfilter.filter</string>
+      <key>PayloadUUID</key><string>REPLACE_UUID_3</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>UserDefinedName</key><string>Invariant Network Filter</string>
+      <key>FilterType</key><string>Plugin</string>
+      <key>PluginBundleID</key><string>com.skbellevue.invariant.netfilter</string>
+      <key>FilterSockets</key><true/>
+      <key>FilterPackets</key><false/>
+      <key>FilterGrade</key><string>inspector</string>
+      <key>FilterDataProviderBundleIdentifier</key><string>com.skbellevue.invariant.netfilter.extension</string>
+      <key>FilterDataProviderDesignatedRequirement</key><string>REPLACE_DESIGNATED_REQUIREMENT</string>
+      <key>VendorConfig</key>
+      <dict>
+        <key>config</key><string>{}</string>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

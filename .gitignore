@@ -14,3 +14,9 @@ kev.json
 *.report.json
 learned.yaml
 .env
+
+# macOS Network Extension (XcodeGen output and builds)
+macos/InvariantNetFilter/*.xcodeproj/
+macos/InvariantNetFilter/build/
+macos/InvariantNetFilter/.build/
+macos/InvariantNetFilter/.swiftpm/

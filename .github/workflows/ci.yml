@@ -109,3 +109,34 @@ jobs:
       - name: eslogger is present on this runner (informational)
         continue-on-error: true
         run: eslogger --list-events | grep -E '^(exec|create|rename|unlink|close)$'
+
+  swift-core-linux:
+    # InvariantFlowCore is plain Foundation: keep it portable and tested off-Mac too.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test --package-path macos/InvariantNetFilter
+
+  macos-network-extension:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift tests (InvariantFlowCore, incl. the record contract shared with Python)
+        run: swift test --package-path macos/InvariantNetFilter
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd macos/InvariantNetFilter && xcodegen generate
+      - name: Build host app + system extension (unsigned)
+        run: |
+          cd macos/InvariantNetFilter
+          xcodebuild -project InvariantNetFilter.xcodeproj -scheme InvariantNetFilter \
+            -configuration Debug -destination 'platform=macOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" build
+      - name: System extension is embedded where macOS looks for it
+        run: |
+          app=macos/InvariantNetFilter/build/Build/Products/Debug/InvariantNetFilter.app
+          ext="$app/Contents/Library/SystemExtensions/com.skbellevue.invariant.netfilter.extension.systemextension"
+          test -d "$ext" || { find "$app" -maxdepth 4; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :NetworkExtension:NEProviderClasses' "$ext/Contents/Info.plist"
