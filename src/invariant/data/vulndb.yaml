@@ -1,0 +1,88 @@
+# L1 exposure knowledge base for AI and automation platforms.
+#
+# vulnerabilities: version-ranged CVEs. `kev` is filled from the CISA KEV feed
+#   at run time when you pass --kev (the built-in value is only a fallback).
+# misconfigurations: conditions on an asset's declared config.
+#
+# Sources: NVD, GitHub advisories, CISA KEV, vendor guidance (see docs/sources.md).
+version: 2026-11-24
+vulnerabilities:
+  - id: CVE-2025-3248
+    product: langflow
+    fixed: "1.3.0"
+    severity: critical
+    kev: true
+    kev_added: "2025-05-05"
+    title: "Langflow unauthenticated RCE via /api/v1/validate/code"
+    note: "Used for initial access in the JADEPUFFER intrusion. 1.3.0 adds authentication; also restrict network access."
+  - id: CVE-2021-29441
+    product: nacos
+    fixed: "1.4.1"
+    severity: critical
+    kev: null
+    title: "Nacos authentication bypass via spoofed 'Nacos-Server' User-Agent"
+    note: "Chained with an unrotated default signing key in JADEPUFFER to forge an admin token."
+  - id: CVE-2021-43116
+    product: nacos
+    last_affected: "2.0.3"
+    severity: high
+    kev: null
+    title: "Nacos hard-coded default JWT signing key allows token forgery"
+    note: "Rotating token.secret.key is required even on patched versions that still carry the default."
+
+misconfigurations:
+  - id: INV-MINIO-DEFAULT-ROOT
+    product: minio
+    severity: critical
+    title: "MinIO root credentials are the documented defaults"
+    when:
+      - {key: config.root_user, equals_any: [minioadmin]}
+      - {key: config.root_password, equals_any: [minioadmin]}
+    fix: "Set MINIO_ROOT_USER / MINIO_ROOT_PASSWORD to unique values; move workloads to scoped access keys."
+  - id: INV-NACOS-DEFAULT-TOKEN-KEY
+    product: nacos
+    severity: critical
+    title: "Nacos token.secret.key is the public default; admin tokens can be forged"
+    when:
+      - key: config.token_secret_key
+        equals_any:
+          - SecretKey012345678901234567890123456789012345678901234567890123456789
+          - SecretKey01234567890123456789012345678901234567890123456789012345678
+    fix: "Generate a random 32+ byte Base64 key for nacos.core.auth.plugin.nacos.token.secret.key (or NACOS_AUTH_TOKEN)."
+  - id: INV-NACOS-DEFAULT-IDENTITY
+    product: nacos
+    severity: high
+    title: "Nacos server.identity key/value are defaults"
+    when:
+      - {key: config.server_identity_key, equals_any: [serverIdentity, ""]}
+    fix: "Set unique nacos.core.auth.server.identity.key and .value."
+  - id: INV-NACOS-AUTH-DISABLED
+    product: nacos
+    severity: high
+    title: "Nacos authentication is disabled"
+    when:
+      - {key: config.auth_enabled, equals: false}
+    fix: "Set nacos.core.auth.enabled=true."
+  - id: INV-LANGFLOW-AUTOLOGIN
+    product: langflow
+    severity: high
+    title: "Langflow auto-login is enabled on a reachable instance"
+    when:
+      - {key: config.auto_login, equals: true}
+      - {key: internet_facing, equals: true}
+    fix: "Set LANGFLOW_AUTO_LOGIN=false and configure a superuser; front with an authenticating proxy."
+  - id: INV-OLLAMA-EXPOSED
+    product: ollama
+    severity: high
+    title: "Ollama API reachable from the network (it has no built-in authentication)"
+    when:
+      - {key: config.bind, equals_any: ["0.0.0.0", "0.0.0.0:11434", "::"]}
+    fix: "Bind to 127.0.0.1 (OLLAMA_HOST) and put an authenticating reverse proxy in front if remote use is required."
+  - id: INV-GENERIC-NOAUTH-EXPOSED
+    product: "*"
+    severity: high
+    title: "Internet-facing AI/automation service without authentication"
+    when:
+      - {key: internet_facing, equals: true}
+      - {key: auth_enabled, equals: false}
+    fix: "Require authentication or remove from the internet."

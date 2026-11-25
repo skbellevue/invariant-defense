@@ -1,0 +1,23 @@
+title: AI Response Log Written by Script Host (thinking_robot_log)
+id: 6f1d5a0e-2c1b-4c55-9a3e-7c2e1b0a4d08
+status: experimental
+description: |
+  Cheap L0 indicator kept on purpose: PROMPTFLUX logged Gemini responses to %TEMP%\thinking_robot_log.txt.
+  Indicators like this age fast; keep them as filters, never as the primary control.
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools
+author: invariant-defense
+date: 2026-11-24
+tags:
+  - attack.defense-evasion
+  - attack.t1027.014
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: '\thinking_robot_log.txt'
+  condition: selection
+falsepositives:
+  - None expected
+level: high

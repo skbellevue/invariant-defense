@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invariant-defense"
+version = "0.1.0"
+description = "Reference implementation of the Invariant Defense Model: detect AI-enabled malware by what it must do, not what it looks like."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Serge Kameni" }]
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=6.0"]
+keywords = ["security", "detection", "ai-malware", "llm", "egress", "edr", "blue-team"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Topic :: Security",
+  "Intended Audience :: Information Technology",
+]
+
+[project.optional-dependencies]
+live = ["psutil>=5.9"]
+yara = ["yara-python>=4.3"]
+dev = ["pytest>=8", "ruff>=0.5", "pysigma>=0.11", "yara-python>=4.3", "psutil>=5.9"]
+
+[project.scripts]
+invariant = "invariant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+invariant = ["data/*.yaml", "data/*.yar"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]

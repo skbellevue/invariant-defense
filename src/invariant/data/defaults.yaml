@@ -1,0 +1,199 @@
+# Built-in defaults. Override any key in your own config file (see
+# config/invariant.example.yaml); maps are merged, lists are replaced.
+
+# ---------------------------------------------------------------- L2: egress
+egress:
+  # Who is allowed to talk to which model provider. First match wins.
+  # Fields: processes (image basename globs), providers (catalog names or '*'),
+  # hosts (host globs), users (user globs), cmdline_contains (any substring).
+  allow:
+    - name: sanctioned-ai-gateway
+      processes: ["litellm*", "envoy*", "ai-gateway*"]
+      providers: ["*"]
+    - name: developer-assistants
+      processes: ["code", "code.exe", "cursor", "cursor.exe", "claude", "claude.exe", "node", "node.exe"]
+      providers: [anthropic, openai, google_gemini, azure_openai, aws_bedrock]
+      hosts: ["dev-*", "*-dev-*", "build-*"]
+    - name: browsers-to-chat-ui
+      processes: ["*chrome*", "*msedge*", "*firefox*", "safari*"]
+      providers: [openai, anthropic, google_gemini]
+  # Processes for which ANY model contact is high severity (script hosts,
+  # LOLBins, Office). Generated-code malware lives here.
+  high_risk_processes:
+    - wscript.exe
+    - cscript.exe
+    - mshta.exe
+    - powershell.exe
+    - pwsh.exe
+    - pwsh
+    - cmd.exe
+    - rundll32.exe
+    - regsvr32.exe
+    - msbuild.exe
+    - installutil.exe
+    - winword.exe
+    - excel.exe
+    - powerpnt.exe
+    - outlook.exe
+    - python.exe
+    - pythonw.exe
+    - python
+    - python3
+    - "python3.*"
+    - perl
+    - ruby
+    - lua
+    - osascript
+    - bash
+    - sh
+    - curl
+    - curl.exe
+    - wget
+  beacon:
+    min_events: 4         # contacts needed before judging periodicity
+    max_jitter_ratio: 0.2 # stdev/mean of intervals; lower = more regular
+    min_interval_s: 60    # ignore sub-minute chatter (keep-alives)
+    ignore_processes: ["*update*", "*chrome*", "*msedge*", "*firefox*", "ntpd", "chronyd", "systemd-timesyncd"]
+  known_bad_key_fps: []   # fingerprints from `invariant hunt` you want flagged on use
+
+# --------------------------------------------------------------- L3: behavior
+behavior:
+  query_then_exec_window_s: 300
+  generated_script_window_s: 600
+  self_rewrite_min_versions: 3
+  recon_window_s: 120
+  recon_min_distinct: 4
+  staging_window_s: 600
+  staging_min_files: 15
+  command_shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, fish]
+  shells: [cmd.exe, powershell.exe, pwsh.exe, pwsh, bash, sh, dash, zsh, wscript.exe, cscript.exe, mshta.exe, python, python3, "python3.*", python.exe, node, node.exe, lua, perl, osascript]
+  script_extensions: [.vbs, .vbe, .js, .jse, .wsf, .hta, .ps1, .psm1, .bat, .cmd, .py, .lua, .sh, .rb, .pl, .applescript, .scpt]
+  document_extensions: [.doc, .docx, .xls, .xlsx, .ppt, .pptx, .pdf, .txt, .rtf, .csv, .odt, .key, .pages]
+  recon_commands:
+    - whoami
+    - systeminfo
+    - hostname
+    - ipconfig
+    - ifconfig
+    - "ip a"
+    - "ip addr"
+    - "net user"
+    - "net group"
+    - "net localgroup"
+    - "net view"
+    - "net share"
+    - nltest
+    - "dsquery"
+    - tasklist
+    - "sc query"
+    - "wmic"
+    - "netstat"
+    - "arp -a"
+    - "route print"
+    - "uname -a"
+    - "id"
+    - "cat /etc/passwd"
+    - "ps aux"
+    - "env"
+    - "printenv"
+    - "Get-ADComputer"
+    - "Get-Process"
+    - "Get-Service"
+  # Application servers that should never spawn shells / decoders.
+  app_servers:
+    # dedicated server binaries, matched by name alone
+    images: [tomcat*, uvicorn, gunicorn, w3wp.exe, httpd, apache2, nginx, "php-fpm*", sqlservr.exe]
+    # generic runtimes (java, python, node) count as app servers when their command line names one of these
+    cmdline_markers: [langflow, nacos, flowise, n8n, dify, comfyui, open-webui, jupyter, airflow, uvicorn, gunicorn, catalina]
+  app_server_children: [sh, bash, dash, zsh, cmd.exe, powershell.exe, pwsh, curl, wget, base64, certutil.exe, nc, ncat, socat, python, python3, perl]
+  # AI command-line tools that malware can drive (QUIETVAULT pattern).
+  ai_clis: [claude, claude.exe, gemini, gemini.exe, codex, codex.exe, copilot, aider, ollama, ollama.exe, llm, sgpt, opencode]
+  ai_cli_expected_parents: [bash, zsh, fish, sh, pwsh, powershell.exe, cmd.exe, windowsterminal.exe, code, code.exe, cursor, cursor.exe, tmux*, iterm*, terminal, alacritty, kitty, wezterm*, node, node.exe, login, sshd]
+  # Tools allowed to write-then-run scripts (build systems, IDEs, package managers).
+  dev_tools: [code, code.exe, cursor, cursor.exe, pycharm*, idea*, git, git.exe, make, cmake, msbuild.exe, npm, npm.exe, pip, pip3, uv, poetry, cargo, go, gradle*, mvn*]
+  persistence_paths:
+    - "*/start menu/programs/startup/*"
+    - "*/microsoft/windows/start menu/programs/startup/*"
+    - "*/library/launchagents/*"
+    - "*/library/launchdaemons/*"
+    - "/etc/cron*"
+    - "/var/spool/cron/*"
+    - "*/.config/systemd/user/*"
+    - "/etc/systemd/system/*"
+    - "*/.config/autostart/*"
+    - "*/.bashrc"
+    - "*/.zshrc"
+    - "*/.profile"
+  removable_paths: ["[d-z]:/*", "/media/*", "/mnt/usb*", "/volumes/*", "//*"]
+  narration_markers:
+    - "step 1:"
+    - "step 2:"
+    - "now we"
+    - "let's "
+    - "let me "
+    - "high-roi"
+    - "next, we"
+    - "this will allow us"
+    - "as an ai"
+    - "i will now"
+
+# --------------------------------------------------------------- L4: identity
+identity:
+  max_token_lifetime_s: 3600
+  max_secret_age_days: 90
+  session_window_s: 900
+  admin_roles: [admin, administrator, root, superuser, owner, ROLE_ADMIN, cluster-admin]
+  default_jwt_secrets:
+    # Public default Nacos token.secret.key values (Base64 strings).
+    - SecretKey012345678901234567890123456789012345678901234567890123456789
+    - SecretKey01234567890123456789012345678901234567890123456789012345678
+    # Common placeholders seen in templates and tutorials.
+    - secret
+    - changeme
+    - your-256-bit-secret
+  spoofable_user_agents: [Nacos-Server]
+
+# ----------------------------------------------------------------- L5: impact
+impact:
+  destructive_window_s: 60
+  destructive_threshold: 50      # renames + deletes + high-entropy writes per process per window
+  high_entropy: 7.2              # bits/byte
+  sql_window_s: 120
+  sql_mass_rows: 200             # rows touched by UPDATE/DELETE per session per window
+  sql_destructive: [drop table, drop database, truncate, drop schema]
+  protected_tables: [config_info, his_config_info, users, roles, permissions]
+
+# --------------------------------------------------------------- response loop
+response:
+  enabled: false        # `--respond` on the CLI turns it on
+  dry_run: true         # adapters log what they would do unless you set false
+  approval: deny        # deny | prompt | file  (how irreversible steps get human sign-off)
+  approval_dir: ./approvals
+  min_severity: high
+  adapters:
+    isolate: log        # log | iptables | webhook | command
+    revoke: log         # log | webhook | command
+    snapshot: log
+    notify: log
+  webhook_url: null
+  commands: {}          # e.g. {isolate: "edrctl contain {host}", revoke: "vault lease revoke -prefix {key_ref}"}
+  management_cidrs: [10.0.0.0/8]
+  playbooks:
+    # Selected by layer; the first matching playbook runs. `approve` marks
+    # irreversible or high-blast-radius steps that need a human.
+    - name: model-dependency-breach
+      match: {layers: [L2, L3]}
+      steps: [isolate, revoke, snapshot, notify, verify]
+      approve: [revoke]
+    - name: identity-compromise
+      match: {layers: [L4]}
+      steps: [revoke, notify, verify]
+      approve: []
+    - name: impact-in-progress
+      match: {layers: [L5]}
+      steps: [isolate, snapshot, revoke, notify, verify]
+      approve: [revoke]
+    - name: exposure
+      match: {layers: [L1]}
+      steps: [notify]
+      approve: []

@@ -1,0 +1,84 @@
+# Catalog of language-model endpoints (L2: model dependency).
+#
+# AI-enabled malware must reach a model: a cloud API, an inference router,
+# or a self-hosted server. Every entry here is a place it can go. Keep this
+# list current; it is the single most valuable data file in the platform.
+#
+#   domains   exact host or any sub-domain (suffix match)
+#   patterns  regular expressions on the host (for regional endpoints)
+#   ports     self-hosted inference servers recognized by port alone
+#   paths     URL paths that identify an OpenAI/Ollama-compatible API in
+#             proxy or gateway logs (http_request events), wherever it is hosted
+version: 2026-11-24
+providers:
+  openai:
+    category: cloud_api
+    domains: [api.openai.com]
+  azure_openai:
+    category: cloud_api
+    domains: [openai.azure.com, cognitiveservices.azure.com, services.ai.azure.com]
+  anthropic:
+    category: cloud_api
+    domains: [api.anthropic.com]
+  google_gemini:
+    category: cloud_api
+    domains: [generativelanguage.googleapis.com, aiplatform.googleapis.com]
+  aws_bedrock:
+    category: cloud_api
+    patterns: ['^bedrock-runtime(-fips)?\.[a-z0-9-]+\.amazonaws\.com$', '^bedrock-agent-runtime\.[a-z0-9-]+\.amazonaws\.com$']
+  huggingface_inference:
+    category: inference_router
+    domains: [api-inference.huggingface.co, router.huggingface.co, endpoints.huggingface.cloud]
+  openrouter:
+    category: inference_router
+    domains: [openrouter.ai]
+  together:
+    category: inference_router
+    domains: [api.together.xyz, api.together.ai]
+  fireworks:
+    category: inference_router
+    domains: [api.fireworks.ai]
+  replicate:
+    category: inference_router
+    domains: [api.replicate.com]
+  groq:
+    category: cloud_api
+    domains: [api.groq.com]
+  mistral:
+    category: cloud_api
+    domains: [api.mistral.ai]
+  cohere:
+    category: cloud_api
+    domains: [api.cohere.com, api.cohere.ai]
+  deepseek:
+    category: cloud_api
+    domains: [api.deepseek.com]
+  xai:
+    category: cloud_api
+    domains: [api.x.ai]
+  perplexity:
+    category: cloud_api
+    domains: [api.perplexity.ai]
+  cerebras:
+    category: cloud_api
+    domains: [api.cerebras.ai]
+  alibaba_dashscope:
+    category: cloud_api
+    domains: [dashscope.aliyuncs.com, dashscope-intl.aliyuncs.com]
+  moonshot:
+    category: cloud_api
+    domains: [api.moonshot.cn, api.moonshot.ai]
+  zhipu:
+    category: cloud_api
+    domains: [open.bigmodel.cn]
+  ollama:
+    category: self_hosted
+    ports: [11434]
+    paths: ['/api/generate', '/api/chat', '/api/embeddings']
+  lm_studio:
+    category: self_hosted
+    ports: [1234]
+  openai_compatible:
+    category: self_hosted
+    # vLLM, TGI, llama.cpp server, LiteLLM, LocalAI... all expose this shape
+    paths: ['/v1/chat/completions', '/v1/completions', '/v1/responses', '/v1/messages']

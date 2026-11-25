@@ -1,0 +1,43 @@
+title: LLM Endpoint Resolved by an Unsanctioned Process
+id: 6f1d5a0e-2c1b-4c55-9a3e-7c2e1b0a4d02
+status: experimental
+description: |
+  Invariant L2. Inventory every process that resolves a model-provider domain. Filters list the
+  sanctioned clients; everything else is either shadow AI or malware and both need an owner.
+author: invariant-defense
+date: 2026-11-24
+tags:
+  - attack.command-and-control
+  - attack.t1071.001
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryName|endswith:
+      - 'generativelanguage.googleapis.com'
+      - 'api.openai.com'
+      - 'api.anthropic.com'
+      - 'router.huggingface.co'
+      - 'api-inference.huggingface.co'
+      - 'openrouter.ai'
+      - 'api.deepseek.com'
+      - 'api.mistral.ai'
+      - 'api.groq.com'
+      - 'api.x.ai'
+      - 'dashscope.aliyuncs.com'
+  filter_browsers:
+    Image|endswith:
+      - '\chrome.exe'
+      - '\msedge.exe'
+      - '\firefox.exe'
+  filter_sanctioned:
+    Image|endswith:
+      - '\Code.exe'
+      - '\Cursor.exe'
+      - '\claude.exe'
+      - '\ai-gateway.exe'
+  condition: selection and not 1 of filter_*
+falsepositives:
+  - New sanctioned AI tools not yet in the filter (add them, with an owner)
+level: medium

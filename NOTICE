@@ -1,0 +1,4 @@
+invariant-defense
+Copyright 2026 Serge Kameni
+
+This product includes detection logic informed by public research from Google Threat Intelligence Group, SentinelLABS, Trend Micro, Sysdig, Check Point Research, ESET and CERT-UA (see docs/sources.md).

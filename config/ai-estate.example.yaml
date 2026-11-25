@@ -1,0 +1,108 @@
+# AI estate inventory (L1 exposure + L4 identity).
+#
+# Step 1 of the 90-day plan: you cannot defend what you have not listed.
+# Keep this file in version control, owned by a named team, reviewed monthly.
+# Every value below is illustrative.
+
+hosts:
+  total: 1200                    # managed endpoints and servers
+  with_egress_telemetry: 870     # hosts whose outbound connections are attributed to processes
+
+assets:
+  - name: langflow-public
+    product: langflow
+    version: "1.2.0"
+    url: https://flows.example.com
+    internet_facing: true
+    auth_enabled: true
+    owner: ml-platform
+    last_patched: "2026-06-01"
+    config: {auto_login: true}
+
+  - name: langflow-internal
+    product: langflow
+    version: "1.4.2"
+    url: http://langflow.internal:7860
+    internet_facing: false
+    auth_enabled: true
+    owner: ml-platform
+    last_patched: "2026-11-10"
+    config: {auto_login: false}
+
+  - name: nacos-prod
+    product: nacos
+    version: "1.4.0"
+    url: http://nacos.internal:8848
+    internet_facing: false
+    auth_enabled: true
+    owner: platform-infra
+    last_patched: "2025-02-11"
+    config:
+      auth_enabled: true
+      token_secret_key: SecretKey012345678901234567890123456789012345678901234567890123456789
+      server_identity_key: serverIdentity
+
+  - name: minio-artifacts
+    product: minio
+    version: "RELEASE.2025-04-22"
+    url: http://minio.internal:9000
+    internet_facing: false
+    auth_enabled: true
+    owner: data-eng
+    config: {root_user: minioadmin, root_password: minioadmin}
+
+  - name: ollama-gpu-01
+    product: ollama
+    version: "0.12.3"
+    url: http://10.0.8.14:11434
+    internet_facing: false
+    auth_enabled: false
+    owner: research
+    config: {bind: "0.0.0.0"}
+
+  - name: n8n-automation
+    product: n8n
+    version: "1.88.0"
+    url: https://automate.example.com
+    internet_facing: true
+    auth_enabled: true
+    # owner missing on purpose: the audit flags it
+    last_patched: "2026-11-20"
+
+# Processes that are EXPECTED to call model providers, and where. Everything
+# else that does is either shadow AI or malware. Mirrors egress.allow in config.
+expected_llm_processes:
+  - {process: litellm, hosts: "ai-gw-*", providers: ["*"], owner: ml-platform}
+  - {process: code, hosts: "dev-*", providers: [anthropic, openai], owner: it-eng}
+  - {process: claude, hosts: "dev-*", providers: [anthropic], owner: it-eng}
+
+credentials:
+  - name: gemini-prod-key
+    kind: api_key
+    provider: google
+    owner: ml-platform
+    created: "2025-03-02"
+    bound_to: ai-gw-01
+    revocation: {runbook: "https://wiki.example.com/runbooks/revoke-gemini", provider_contact: "console"}
+
+  - name: hf-inference-token
+    kind: token
+    provider: huggingface
+    owner: research
+    created: "2026-10-01"
+    expires: "2027-01-01"
+    # no bound_to and no revocation runbook: flagged
+
+  - name: support-agent-sa
+    kind: service_account
+    used_by_agent: true
+    scopes: ["tickets:read", "tickets:write", "admin"]
+    owner: support-eng
+    rotated: "2026-11-01"
+    expires: "2026-12-01"
+
+  - name: minio-root
+    kind: access_key
+    default: true
+    owner: data-eng
+    created: "2024-05-05"

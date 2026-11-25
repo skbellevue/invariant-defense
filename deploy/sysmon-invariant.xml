@@ -1,0 +1,78 @@
+<!--
+  Sysmon configuration fragment for the Invariant Defense Model.
+  Merge into your existing config (e.g. SwiftOnSecurity / olafhartong sysmon-modular).
+  It makes sure the events the detectors need are collected:
+    1  process creation        (L3 lineage, query-then-exec, recon, AI CLI abuse)
+    3  network connection      (L2 egress attribution, beaconing)
+    11 file create             (L3 script lifecycle, persistence, staging; L5 rates)
+    22 DNS query               (L2: which process resolved a model endpoint)
+    23 file delete (archived)  (L5 destructive rate)
+  Schema 4.90 (Sysmon 15). Test on a pilot group before broad rollout.
+-->
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>SHA256</HashAlgorithms>
+  <CheckRevocation>False</CheckRevocation>
+  <EventFiltering>
+    <RuleGroup name="invariant-process" groupRelation="or">
+      <ProcessCreate onmatch="exclude" />
+    </RuleGroup>
+
+    <RuleGroup name="invariant-network" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <!-- L2: every connection to a model provider, whoever makes it -->
+        <DestinationHostname condition="end with">generativelanguage.googleapis.com</DestinationHostname>
+        <DestinationHostname condition="end with">aiplatform.googleapis.com</DestinationHostname>
+        <DestinationHostname condition="end with">api.openai.com</DestinationHostname>
+        <DestinationHostname condition="end with">openai.azure.com</DestinationHostname>
+        <DestinationHostname condition="end with">api.anthropic.com</DestinationHostname>
+        <DestinationHostname condition="end with">huggingface.co</DestinationHostname>
+        <DestinationHostname condition="end with">openrouter.ai</DestinationHostname>
+        <DestinationHostname condition="end with">api.deepseek.com</DestinationHostname>
+        <DestinationHostname condition="end with">api.mistral.ai</DestinationHostname>
+        <DestinationHostname condition="end with">api.groq.com</DestinationHostname>
+        <DestinationHostname condition="end with">api.x.ai</DestinationHostname>
+        <DestinationHostname condition="end with">aliyuncs.com</DestinationHostname>
+        <DestinationPort condition="is">11434</DestinationPort>
+        <!-- L3: anything script hosts and Office connect to -->
+        <Image condition="end with">\wscript.exe</Image>
+        <Image condition="end with">\cscript.exe</Image>
+        <Image condition="end with">\mshta.exe</Image>
+        <Image condition="end with">\powershell.exe</Image>
+        <Image condition="end with">\pwsh.exe</Image>
+        <Image condition="end with">\rundll32.exe</Image>
+        <Image condition="end with">\regsvr32.exe</Image>
+        <Image condition="end with">\winword.exe</Image>
+        <Image condition="end with">\excel.exe</Image>
+        <Image condition="end with">\python.exe</Image>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <RuleGroup name="invariant-files" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="contains">\Start Menu\Programs\Startup\</TargetFilename>
+        <TargetFilename condition="begin with">C:\ProgramData\</TargetFilename>
+        <TargetFilename condition="end with">.vbs</TargetFilename>
+        <TargetFilename condition="end with">.js</TargetFilename>
+        <TargetFilename condition="end with">.ps1</TargetFilename>
+        <TargetFilename condition="end with">.hta</TargetFilename>
+        <TargetFilename condition="end with">.bat</TargetFilename>
+        <TargetFilename condition="end with">.lua</TargetFilename>
+        <TargetFilename condition="end with">.py</TargetFilename>
+        <TargetFilename condition="end with">thinking_robot_log.txt</TargetFilename>
+        <TargetFilename condition="contains">\.claude\</TargetFilename>
+        <TargetFilename condition="end with">.mcp.json</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <RuleGroup name="invariant-dns" groupRelation="or">
+      <DnsQuery onmatch="exclude" />
+    </RuleGroup>
+
+    <RuleGroup name="invariant-delete" groupRelation="or">
+      <FileDelete onmatch="include">
+        <TargetFilename condition="contains">\Users\</TargetFilename>
+        <TargetFilename condition="contains">\Shares\</TargetFilename>
+      </FileDelete>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>

@@ -1,0 +1,52 @@
+title: Script Host or LOLBin Connects to an LLM API
+id: 6f1d5a0e-2c1b-4c55-9a3e-7c2e1b0a4d01
+status: experimental
+description: |
+  Invariant L2 (model dependency). Script hosts, Office and LOLBins have no business calling a
+  language-model API. Runtime-generated malware (PROMPTFLUX: VBScript -> Gemini) must make this call.
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools
+author: invariant-defense
+date: 2026-11-24
+tags:
+  - attack.command-and-control
+  - attack.t1071.001
+  - attack.defense-evasion
+  - attack.t1027.014
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection_proc:
+    Image|endswith:
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      - '\msbuild.exe'
+      - '\winword.exe'
+      - '\excel.exe'
+      - '\python.exe'
+      - '\pythonw.exe'
+  selection_dst:
+    DestinationHostname|endswith:
+      - 'generativelanguage.googleapis.com'
+      - 'aiplatform.googleapis.com'
+      - 'api.openai.com'
+      - 'openai.azure.com'
+      - 'api.anthropic.com'
+      - 'router.huggingface.co'
+      - 'api-inference.huggingface.co'
+      - 'openrouter.ai'
+      - 'api.deepseek.com'
+      - 'api.mistral.ai'
+      - 'api.groq.com'
+      - 'api.together.xyz'
+      - 'dashscope.aliyuncs.com'
+  condition: selection_proc and selection_dst
+falsepositives:
+  - Sanctioned automation that calls an LLM from Python; allow-list by path, signer and host
+level: high

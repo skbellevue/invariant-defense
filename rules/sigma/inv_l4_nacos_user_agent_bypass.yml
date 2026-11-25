@@ -1,0 +1,25 @@
+title: Nacos Server-Identity User-Agent from Non-Cluster Client
+id: 6f1d5a0e-2c1b-4c55-9a3e-7c2e1b0a4d07
+status: experimental
+description: |
+  Invariant L4. Nacos before 1.4.1 skips authentication when the User-Agent claims to be another
+  Nacos node (CVE-2021-29441). Requests carrying it from outside the cluster are attacks.
+references:
+  - https://securitylab.github.com/advisories/GHSL-2020-325_326-nacos/
+author: invariant-defense
+date: 2026-11-24
+tags:
+  - attack.initial-access
+  - attack.t1190
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-user-agent: 'Nacos-Server'
+    cs-uri-stem|startswith: '/nacos/'
+  filter_cluster:
+    c-ip|cidr: '10.0.4.0/28'   # replace with your Nacos cluster members
+  condition: selection and not filter_cluster
+falsepositives:
+  - Cluster members missing from the filter
+level: critical

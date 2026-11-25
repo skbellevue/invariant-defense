@@ -1,0 +1,47 @@
+# Example override file:  invariant -c config/invariant.example.yaml <command>
+# Only list what you change; everything else comes from src/invariant/data/defaults.yaml.
+
+egress:
+  allow:
+    # 1. The sanctioned AI gateway is the only thing that should reach providers directly.
+    - name: ai-gateway
+      processes: ["litellm*", "envoy*"]
+      hosts: ["ai-gw-*"]
+      providers: ["*"]
+    # 2. Developer assistants on developer machines only.
+    - name: developer-assistants
+      processes: ["code", "code.exe", "cursor*", "claude", "claude.exe", "node", "node.exe"]
+      hosts: ["dev-*"]
+      providers: [anthropic, openai, google_gemini]
+    # 3. A named batch job (pin it with cmdline_contains, not just "python").
+    - name: nightly-summarizer
+      processes: ["python3"]
+      cmdline_contains: ["/opt/jobs/summarize.py"]
+      hosts: ["batch-01"]
+      providers: [azure_openai]
+    # 4. Browsers reaching chat front-ends (lists are replaced, not merged: keep this if you need it).
+    - name: browsers
+      processes: ["*chrome*", "*msedge*", "*firefox*", "safari*"]
+      providers: [openai, anthropic, google_gemini]
+  known_bad_key_fps: []      # paste fingerprints printed by `invariant hunt`
+
+identity:
+  trusted_cluster_ips: [10.0.4.2, 10.0.4.3, 10.0.4.4]   # Nacos cluster members
+  max_token_lifetime_s: 3600
+
+impact:
+  canary_manifest: ./canaries.json
+  protected_tables: [config_info, his_config_info, users, roles, permissions, tenant_info]
+
+response:
+  dry_run: true              # flip to false only after a tabletop exercise
+  approval: file
+  approval_dir: ./approvals
+  adapters:
+    isolate: webhook         # e.g. your SOAR endpoint that calls the EDR "contain host" API
+    revoke: command
+    notify: webhook
+  webhook_url: https://soar.example.com/hooks/invariant
+  commands:
+    revoke: "/usr/local/bin/revoke-llm-keys --host {host} --ref {key_ref}"
+  management_cidrs: [10.0.0.0/24]

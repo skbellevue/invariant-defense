@@ -1,0 +1,82 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -o addopts="" -q
+      - name: Compile YARA rules
+        run: python -c "import yara,glob; [yara.compile(filepath=f) for f in glob.glob('rules/yara/*.yar')]"
+      - name: Validate and convert Sigma rules
+        run: |
+          pip install pysigma-backend-splunk
+          python - <<'EOF'
+          import glob
+          from sigma.collection import SigmaCollection
+          from sigma.backends.splunk import SplunkBackend
+          b = SplunkBackend()
+          for f in sorted(glob.glob("rules/sigma/*.yml")):
+              c = SigmaCollection.from_yaml(open(f).read())
+              assert not [e for r in c.rules for e in r.errors], f
+              b.convert(c)
+              print("ok", f)
+          EOF
+      - name: Demo must detect every scenario and stay quiet on benign
+        run: |
+          invariant demo --scenario jadepuffer --fail-on critical && exit 1 || test $? -eq 2
+          invariant demo --scenario benign --fail-on low
+
+  database-guards:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client mariadb-client
+      - name: PostgreSQL impact guard
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: pg
+        run: tests/sql/test_postgres_guard.sh
+      - name: MySQL/MariaDB impact guard
+        env:
+          MYSQL: mysql -uroot -proot -h127.0.0.1 --protocol=TCP
+        run: tests/sql/test_mysql_guard.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t invariant-defense .
+      - run: docker run --rm invariant-defense demo --scenario lamehug

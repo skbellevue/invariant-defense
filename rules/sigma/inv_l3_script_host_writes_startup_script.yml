@@ -1,0 +1,38 @@
+title: Script Host Writes a Script into the Startup Folder
+id: 6f1d5a0e-2c1b-4c55-9a3e-7c2e1b0a4d03
+status: experimental
+description: |
+  Invariant L3. PROMPTFLUX copied each Gemini-regenerated VBScript into the Startup folder. The
+  content changes every time; the persistence technique does not.
+author: invariant-defense
+date: 2026-11-24
+tags:
+  - attack.persistence
+  - attack.t1547.001
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+    TargetFilename|contains: '\Start Menu\Programs\Startup\'
+    TargetFilename|endswith:
+      - '.vbs'
+      - '.vbe'
+      - '.js'
+      - '.jse'
+      - '.wsf'
+      - '.hta'
+      - '.ps1'
+      - '.bat'
+      - '.cmd'
+      - '.lnk'
+  condition: selection
+falsepositives:
+  - Login scripts deployed by administrators (should come from management tooling, not script hosts)
+level: high
