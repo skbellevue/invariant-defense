@@ -9,8 +9,8 @@ promptflux   self-rewriting VBScript dropper calling Gemini hourly (GTIG, Nov 20
 lamehug      Python stealer asking a Hugging Face-hosted Qwen model for recon commands (CERT-UA / GTIG, 2025)
 jadepuffer   LLM-agent intrusion: Langflow RCE -> MinIO defaults -> forged Nacos token -> config encryption
              (Sysdig via Trend Micro / BleepingComputer, Jul 2026)
-s1ngularity  macOS: npm postinstall drives installed AI CLIs to hunt secrets (Nx, Aug 2025); emitted
-             in eslogger's JSON shape and mapped by the macOS collector
+s1ngularity  macOS: npm postinstall drives installed AI CLIs to hunt secrets (Nx, Aug 2025); process and
+             file events in eslogger's JSON shape, connections as Network Extension flow records
 benign       a developer workstation using sanctioned AI tools (false-positive control)
 """
 
@@ -651,13 +651,77 @@ def s1ngularity_eslogger(t0: float = T0) -> list[dict]:
     return recs
 
 
+def s1ngularity_nefilter(t0: float = T0) -> list[dict]:
+    """Flow records as the Invariant Network Extension writes them (macos/InvariantNetFilter):
+    the AI CLIs reach their providers and the postinstall reaches GitHub, where the real
+    campaign published stolen data to public repositories."""
+
+    def flow(t, pid, ppid, image, host, ip, signing_id, team_id):
+        return {
+            "kind": "network_connect",
+            "ts": t,
+            "host": "mac-dev-07",
+            "user": "uid:501",
+            "pid": pid,
+            "ppid": ppid,
+            "image": image,
+            "signed": True,
+            "dst_host": host,
+            "dst_ip": ip,
+            "dst_port": 443,
+            "fields": {
+                "source": "nefilter",
+                "protocol": "tcp",
+                "direction": "outbound",
+                "signing_id": signing_id,
+                "team_id": team_id,
+                "platform_binary": False,
+            },
+        }
+
+    return [
+        flow(
+            t0 + 2.4,
+            7200,
+            7100,
+            "/opt/homebrew/bin/claude",
+            "api.anthropic.com",
+            "160.79.104.10",
+            "claude",
+            "ABCDE12345",
+        ),
+        flow(
+            t0 + 3.3,
+            7210,
+            7100,
+            "/opt/homebrew/bin/gemini",
+            "generativelanguage.googleapis.com",
+            "142.250.0.10",
+            "gemini",
+            "ABCDE12345",
+        ),
+        flow(
+            t0 + 80,
+            7100,
+            7000,
+            "/opt/homebrew/bin/node",
+            "api.github.com",
+            "140.82.112.6",
+            "node",
+            "ABCDE12345",
+        ),
+    ]
+
+
 def s1ngularity(t0: float = T0) -> list[Event]:
     from invariant.collectors.eslogger import map_record
 
-    return [e for e in (map_record(r, "mac-dev-07") for r in s1ngularity_eslogger(t0)) if e]
+    es = [e for e in (map_record(r, "mac-dev-07") for r in s1ngularity_eslogger(t0)) if e]
+    return es + [Event.from_dict(r) for r in s1ngularity_nefilter(t0)]
 
 
 ESLOGGER_SCENARIOS = {"s1ngularity": s1ngularity_eslogger}
+NEFILTER_SCENARIOS = {"s1ngularity": s1ngularity_nefilter}
 
 SCENARIOS = {
     "promptflux": promptflux,

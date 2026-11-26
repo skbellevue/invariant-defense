@@ -14,5 +14,8 @@ Detection logic and simulations are informed by public reporting. Paraphrased; s
 * Snyk, *Weaponizing AI Coding Agents for Malware in the Nx Malicious Package*, 27 Aug 2025 — s1ngularity AI-CLI abuse and shell-profile tampering (macOS replay). https://snyk.io/blog/weaponizing-ai-coding-agents-for-malware-in-the-nx-malicious-package
 * StepSecurity, *s1ngularity: Popular Nx Build System Package Compromised*, Aug 2025. https://www.stepsecurity.io/blog/supply-chain-security-alert-popular-nx-build-system-package-compromised-with-data-stealing-malware
 * Apple, eslogger(1) manual (macOS 13+): JSON modeled on es_message_t, no schema guarantee, root + Full Disk Access required. https://keith.github.io/xcode-man-pages/eslogger.1.html
+* Apple, NEFilterSocketFlow (remoteHostname, remoteFlowEndpoint) and NEFilterFlow (sourceProcessAuditToken, sourceAppAuditToken; sourceAppIdentifier is iOS-only) documentation. https://developer.apple.com/documentation/networkextension/nefiltersocketflow
+* Apple Developer Forums, NEFilterSocketFlow remoteHostname is often nil; audit-token availability. https://developer.apple.com/forums/thread/679860
+* XcodeGen project spec (system-extension product type, local packages). https://yonaskolb.github.io/XcodeGen/Docs/ProjectSpec.html
 * MITRE ATT&CK T1027.014 Polymorphic Code. https://attack.mitre.org/techniques/T1027/014/
 * Key formats: public secret-scanning rule sets (gitleaks, GitLab secret detection) and provider documentation.

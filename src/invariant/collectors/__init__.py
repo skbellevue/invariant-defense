@@ -18,10 +18,14 @@ def load(path: str, fmt: str = "jsonl") -> Iterator[Event]:
         from invariant.collectors.eslogger import read_eslogger
 
         return read_eslogger(path)
-    raise ValueError(f"unknown format {fmt!r} (expected jsonl, sysmon or eslogger)")
+    if fmt == "nefilter":
+        from invariant.collectors.nefilter import read_nefilter
+
+        return read_nefilter(path)
+    raise ValueError(f"unknown format {fmt!r} (expected jsonl, sysmon, eslogger or nefilter)")
 
 
-FORMATS = ("jsonl", "sysmon", "eslogger")
+FORMATS = ("jsonl", "sysmon", "eslogger", "nefilter")
 
 
 def line_mapper(fmt: str, host: str | None = None):
@@ -54,4 +58,8 @@ def line_mapper(fmt: str, host: str | None = None):
                 return None
 
         return _e
+    if fmt == "nefilter":
+        from invariant.collectors.nefilter import map_line
+
+        return map_line
     raise ValueError(f"unknown format {fmt!r}")

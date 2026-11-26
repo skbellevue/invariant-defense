@@ -1,0 +1,88 @@
+# XcodeGen spec for the Invariant network filter (host app + Network Extension).
+#   brew install xcodegen && xcodegen generate && open InvariantNetFilter.xcodeproj
+# Set your Apple Developer team below (or pass DEVELOPMENT_TEAM=... to xcodebuild).
+# The bundle-id prefix and app group must be owned by that team.
+name: InvariantNetFilter
+options:
+  bundleIdPrefix: com.skbellevue.invariant
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""            # <- your Team ID
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    INVARIANT_APP_ID: com.skbellevue.invariant.netfilter
+    INVARIANT_EXT_ID: com.skbellevue.invariant.netfilter.extension
+    INVARIANT_APP_GROUP: $(TeamIdentifierPrefix)com.skbellevue.invariant
+packages:
+  InvariantFlowCore:
+    path: .
+targets:
+  InvariantNetFilter:
+    type: application
+    platform: macOS
+    sources: [App]
+    scheme: {}
+    dependencies:
+      - package: InvariantFlowCore
+      - target: InvariantNetFilterExtension
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/SystemExtensions
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(INVARIANT_APP_ID)
+        PRODUCT_NAME: InvariantNetFilter
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Invariant Network Filter
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        InvariantExtensionBundleID: $(INVARIANT_EXT_ID)
+        NSSystemExtensionUsageDescription: Invariant attributes outbound network connections to processes to detect AI-enabled malware.
+    entitlements:
+      path: App/InvariantNetFilter.entitlements
+      properties:
+        com.apple.developer.system-extension.install: true
+        com.apple.developer.networking.networkextension: [content-filter-provider-systemextension]
+        com.apple.security.application-groups: [$(INVARIANT_APP_GROUP)]
+
+  InvariantNetFilterExtension:
+    type: system-extension
+    platform: macOS
+    sources: [Extension]
+    dependencies:
+      - package: InvariantFlowCore
+      - sdk: NetworkExtension.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(INVARIANT_EXT_ID)
+        PRODUCT_NAME: $(INVARIANT_EXT_ID)     # system extension bundle name must equal its bundle id
+        PRODUCT_MODULE_NAME: InvariantNetFilterExtension
+        SKIP_INSTALL: YES
+    info:
+      path: Extension/Info.plist
+      properties:
+        CFBundleDisplayName: Invariant Network Filter Extension
+        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        InvariantAppGroup: $(INVARIANT_APP_GROUP)
+        NSSystemExtensionUsageDescription: Attributes outbound network connections to processes for invariant-defense.
+        NetworkExtension:
+          NEMachServiceName: $(INVARIANT_APP_GROUP).xpc
+          NEProviderClasses:
+            com.apple.networkextension.filter-data: $(PRODUCT_MODULE_NAME).FilterDataProvider
+    entitlements:
+      path: Extension/InvariantNetFilterExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.developer.networking.networkextension: [content-filter-provider-systemextension]
+        com.apple.security.application-groups: [$(INVARIANT_APP_GROUP)]
