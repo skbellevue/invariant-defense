@@ -40,6 +40,16 @@ final class FlowRecordTests: XCTestCase {
         XCTAssertFalse(line.contains("\n"))
     }
 
+    func testTokenSourceAndAppPidEncoding() throws {
+        var record = FlowRecord(ts: 1, host: "h", pid: 10)
+        record.fields.tokenSource = "process"
+        record.fields.appPid = 9
+        let line = try record.jsonLine()
+        XCTAssertTrue(line.contains("\"token_source\":\"process\""))
+        XCTAssertTrue(line.contains("\"app_pid\":9"))
+        XCTAssertFalse(try FlowRecord(ts: 1, host: "h").jsonLine().contains("token_source"))
+    }
+
     func testSlashesAreNotEscaped() throws {
         let line = try FlowRecord(ts: 1, host: "h", image: "/usr/bin/osascript").jsonLine()
         XCTAssertTrue(line.contains("/usr/bin/osascript"))

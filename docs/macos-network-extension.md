@@ -23,7 +23,7 @@ notarization and a Network Extension entitlement on your team.
 
 ```
 NEFilterSocketFlow ──► FilterDataProvider ──► FlowRecord (InvariantFlowCore)
-  sourceAppAuditToken      │  pid/euid from audit token          │
+  sourceProcessAuditToken  │  pid/euid from audit token          │
   remoteFlowEndpoint       │  proc_pidpath, proc_pidinfo (ppid)  ├─► unified log  "INVFLOW {json}"
   remoteHostname           │  SecCode by audit token (signing)   └─► flows.jsonl (rotated)
                            ▼
@@ -125,8 +125,12 @@ sudo log stream --style ndjson --level info --predicate 'subsystem == "com.skbel
   DNS logs, or run in `all` mode and let the engine's catalog match on what is present. In
   `catalog` mode a flow with no hostname is reported only if its port is listed (e.g. 11434).
 * **Missing audit tokens.** Apple's forums report flows from some apps (for example Firefox on
-  macOS 15) without `sourceAppAuditToken`. Those records still carry the signing id from
-  `sourceAppIdentifier` but no pid.
+  macOS 15) without `sourceAppAuditToken`. The extension uses `sourceProcessAuditToken`
+  (macOS 13+) first and the app token as a fallback; a flow with neither is still recorded
+  (destination, protocol) but without pid, path or signature. macOS has no
+  `sourceAppIdentifier` (it is iOS-only), so the signing id always comes from the code
+  signature. `fields.token_source` says which token was used, and `fields.app_pid` names the
+  responsible app when a helper or XPC service opened the connection for it.
 * **Volume.** `all` mode on a busy developer Mac produces many records; the unified log may
   rate-limit. Use the JSONL file for completeness, or `catalog` mode.
 * **No DNS-only view.** The extension sees connections, not queries. A model reached through a

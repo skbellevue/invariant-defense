@@ -59,7 +59,14 @@ final class FilterDataProvider: NEFilterDataProvider {
         record.fields.direction = "outbound"
         record.fields.flowId = flow.identifier.uuidString
 
-        if let tokenData = flow.sourceAppAuditToken, let token = AuditTokenInfo(tokenData) {
+        // macOS has no sourceAppIdentifier (iOS only): identity comes from audit tokens.
+        // sourceProcessAuditToken (macOS 13+) is the process that opened the socket;
+        // sourceAppAuditToken is the responsible app, which differs when a helper or XPC
+        // service connects on an app's behalf. Prefer the process, record the app if different.
+        let processToken = flow.sourceProcessAuditToken.flatMap { d in AuditTokenInfo(d).map { (d, $0) } }
+        let appToken = flow.sourceAppAuditToken.flatMap { d in AuditTokenInfo(d).map { (d, $0) } }
+        if let source = processToken ?? appToken {
+            let (tokenData, token) = source
             let identity = identities.value(for: token.cacheKey) {
                 ProcessIdentity.resolve(auditToken: tokenData, pid: token.pid)
             }
@@ -68,11 +75,13 @@ final class FilterDataProvider: NEFilterDataProvider {
             record.ppid = identity.ppid.map { Int($0) }
             record.image = identity.path
             record.signed = identity.signed
-            record.fields.signingId = identity.signingId ?? flow.sourceAppIdentifier
+            record.fields.signingId = identity.signingId
             record.fields.teamId = identity.teamId
             record.fields.platformBinary = identity.platformBinary
-        } else {
-            record.fields.signingId = flow.sourceAppIdentifier
+            record.fields.tokenSource = processToken != nil ? "process" : "app"
+            if processToken != nil, let app = appToken?.1, app.pid != token.pid {
+                record.fields.appPid = Int(app.pid)
+            }
         }
         emit(record)
         return .allow()

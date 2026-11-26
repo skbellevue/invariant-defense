@@ -200,3 +200,9 @@ def test_s1ngularity_with_network_extension(run):
 def test_event_roundtrip_keeps_nefilter_source():
     e = Event.from_dict(contract())
     assert e.to_dict()["fields"]["source"] == "nefilter"
+
+
+def test_token_source_and_app_pid_pass_through():
+    rec = {**contract(), "fields": {**contract()["fields"], "token_source": "process", "app_pid": 7000}}
+    e = map_line(json.dumps(rec))
+    assert e.fields["token_source"] == "process" and e.fields["app_pid"] == 7000

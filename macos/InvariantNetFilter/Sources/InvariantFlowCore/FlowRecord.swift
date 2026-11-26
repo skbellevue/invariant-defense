@@ -26,15 +26,23 @@ public struct FlowRecord: Encodable, Equatable {
         public var signingId: String?
         public var teamId: String?
         public var platformBinary: Bool?
+        /// Which audit token identified the process: "process" (sourceProcessAuditToken)
+        /// or "app" (sourceAppAuditToken, the responsible app). Absent when neither was given.
+        public var tokenSource: String?
+        /// pid of the responsible app when it differs from the process (helpers, XPC services).
+        public var appPid: Int?
 
         public init(proto: String? = nil, direction: String? = nil, flowId: String? = nil,
-                    signingId: String? = nil, teamId: String? = nil, platformBinary: Bool? = nil) {
+                    signingId: String? = nil, teamId: String? = nil, platformBinary: Bool? = nil,
+                    tokenSource: String? = nil, appPid: Int? = nil) {
             self.proto = proto
             self.direction = direction
             self.flowId = flowId
             self.signingId = signingId
             self.teamId = teamId
             self.platformBinary = platformBinary
+            self.tokenSource = tokenSource
+            self.appPid = appPid
         }
 
         enum CodingKeys: String, CodingKey {
@@ -45,6 +53,8 @@ public struct FlowRecord: Encodable, Equatable {
             case signingId = "signing_id"
             case teamId = "team_id"
             case platformBinary = "platform_binary"
+            case tokenSource = "token_source"
+            case appPid = "app_pid"
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -56,6 +66,8 @@ public struct FlowRecord: Encodable, Equatable {
             try c.encodeIfPresent(signingId, forKey: .signingId)
             try c.encodeIfPresent(teamId, forKey: .teamId)
             try c.encodeIfPresent(platformBinary, forKey: .platformBinary)
+            try c.encodeIfPresent(tokenSource, forKey: .tokenSource)
+            try c.encodeIfPresent(appPid, forKey: .appPid)
         }
     }
 
